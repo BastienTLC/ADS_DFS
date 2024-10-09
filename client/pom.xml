@@ -30,8 +30,8 @@
 	</dependencies>
 
 	<modules>
-		<module>client</module>
 		<module>proto</module>
+		<module>client</module>
 	</modules>
 
 	<build>

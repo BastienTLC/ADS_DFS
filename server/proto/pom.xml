@@ -8,16 +8,6 @@
 	<version>0.0.1-SNAPSHOT</version>
 	<name>proto</name>
 
-	<developers>
-		<developer>
-			<name>A Sarang Kumar Tak</name>
-			<email>sarangdevproblems@gmail.com</email>
-			<url>https://www.linkedin.com/in/sarang-kumar-tak-1454ba111/</url>
-			<organization>Youtube</organization>
-			<organizationUrl>https://www.youtube.com/channel/UCVno4tMHEXietE3aUTodaZQ</organizationUrl>
-		</developer>
-	</developers>
-
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>

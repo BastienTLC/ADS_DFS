@@ -14,11 +14,13 @@ public class FileUploadInterceptor implements ServerInterceptor {
         if (metadata.containsKey(Constants.fileMetadataKey)) {
             byte[] metaBytes = metadata.get(Constants.fileMetadataKey);
             try {
+                // here we create the file metadata from the array that we got
                 fileMetadata = FileMetadata.parseFrom(metaBytes);
             } catch (InvalidProtocolBufferException e) {
                 Status status = Status.INTERNAL.withDescription("unable to create file metadata");
                 serverCall.close(status, metadata);
             }
+            // intializing the context that will help us get the value of filemetadata in the service
             Context context = Context.current().withValue(
                     Constants.fileMetaContext,
                     fileMetadata
