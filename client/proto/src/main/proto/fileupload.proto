@@ -3,6 +3,7 @@ syntax = "proto3";
 option java_multiple_files = true;
 
 package com.devProblems;
+import "google/protobuf/empty.proto";
 
 message File {
   bytes content = 1;
@@ -42,6 +43,10 @@ message FileMetadata {
   int32 contentLength = 2;
 }
 
+message ListFilesResponse {
+  repeated FileMetadata files = 1;
+}
+
 enum FileOperations {
    CREATE = 0;
    WRITE = 1;
@@ -52,5 +57,7 @@ service FileUploadService {
 
   rpc uploadFile (stream FileUploadRequest) returns (FileUploadResponse) {}
   rpc downloadFile (FileDownloadRequest) returns (stream FileDownloadResponse) {} // new
+  rpc listFiles (google.protobuf.Empty) returns (stream ListFilesResponse) {}
+  rpc getFileMetadata (FileDownloadRequest) returns (FileMetadata) {}
   rpc testMethod (FileDownloadRequest) returns (FileTesting) {} // new
 }

@@ -1,36 +1,24 @@
+// FileUploadService.java
 package com.grpc.client.fileupload.client.service;
 
 import com.devProblems.*;
 import com.google.protobuf.ByteString;
-import com.shared.proto.Constants;
 import io.grpc.Metadata;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
-import net.devh.boot.grpc.client.inject.GrpcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.grpc.client.fileupload.client.utils.DiskFileStorage;
-
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.concurrent.CountDownLatch;
-
 
 @Slf4j
 @Service
 // perhaps we should rename this to FileManagementService later,
 // since we now have both an upload and download method
-public class FileUploadService {
-    private final FileUploadServiceGrpc.FileUploadServiceStub client;
-
-    // this annotation will search the key "file-upload" in the application.yml file, and get the server
-    // information to this particular stub
-    public FileUploadService(@GrpcClient(value = "file-upload") FileUploadServiceGrpc.FileUploadServiceStub client) {
-        this.client = client;
-    }
+public class FileUploadService extends BaseFileService {
 
     public String uploadFile(final MultipartFile multipartFile) {
         String fileName; // provided by client
@@ -54,13 +42,7 @@ public class FileUploadService {
 
         CountDownLatch countDownLatch = new CountDownLatch(1);
 
-        Metadata metadata = new Metadata();
-        metadata.put(Constants.fileMetadataKey,
-                FileMetadata.newBuilder()
-                        .setFileNameWithType(fileName)
-                        .setContentLength(fileSize)
-                        .build()
-                        .toByteArray());
+        Metadata metadata = createMetadata(fileName, fileSize);
 
         // using fileUploadRequestStreamObserver we will stream the file content to the server
         StreamObserver<FileUploadRequest> fileUploadRequestStreamObserver = this.client
@@ -121,13 +103,7 @@ public class FileUploadService {
         StringBuilder response = new StringBuilder();
         CountDownLatch countDownLatch = new CountDownLatch(1);
 
-        Metadata metadata = new Metadata();
-        metadata.put(Constants.fileMetadataKey,
-                FileMetadata.newBuilder()
-                        .setFileNameWithType(fileName)
-                        .build()
-                        .toByteArray());
-
+        Metadata metadata = createMetadata(fileName);
         FileDownloadRequest request = FileDownloadRequest.newBuilder()
                 .setFileName(fileName)
                 .build();
@@ -161,74 +137,4 @@ public class FileUploadService {
 
         return response.toString();
     }
-
-
-    // Have not added proper verification of metadata yet like we do when uploading file yet
-    // Otherwise it seems to work
-    public String downloadFile(String fileName) {
-        StringBuilder response = new StringBuilder();
-        CountDownLatch countDownLatch = new CountDownLatch(1);
-
-        Metadata metadata = new Metadata();
-        metadata.put(Constants.fileMetadataKey,
-                FileMetadata.newBuilder()
-                        .setFileNameWithType(fileName)
-                        .build()
-                        .toByteArray());
-
-        FileDownloadRequest request = FileDownloadRequest.newBuilder()
-                .setFileName(fileName)
-                .build();
-
-
-        DiskFileStorage diskFileStorage = new DiskFileStorage();
-
-        client.withInterceptors(MetadataUtils.newAttachHeadersInterceptor(metadata))
-                .downloadFile(request, new StreamObserver<FileDownloadResponse>() {
-                    @Override
-                    public void onNext(FileDownloadResponse fileDownloadResponse) {
-                        log.info(String.format("received %d length of data", fileDownloadResponse.getFile().getContent().size()));
-                        try {
-                            fileDownloadResponse.getFile().getContent().writeTo(diskFileStorage.getStream());
-                        } catch (IOException e) {
-                            onError(io.grpc.Status.INTERNAL
-                                    .withDescription("cannot write data due to : " + e.getMessage())
-                                    .asRuntimeException());
-                        }
-                    }
-
-                    @Override
-                    public void onError(Throwable throwable) {
-                        log.error("Error occurred while downloading file: {}", throwable.toString());
-                        response.append("Error occurred while downloading the file.");
-                        countDownLatch.countDown();
-                    }
-
-                    @Override
-                    public void onCompleted() {
-                        try {
-                            // after receiving all data, writing it to file
-                            diskFileStorage.write(fileName);
-                            diskFileStorage.close();
-                            response.append("File downloaded successfully: ").append(fileName);
-                        } catch (IOException e) {
-                            log.error("Error occurred while saving the file: {}", e.getMessage());
-                            response.append("Error occurred while saving the file.");
-                        } finally {
-                            countDownLatch.countDown();
-                        }
-                    }
-                });
-
-        try {
-            countDownLatch.await();
-        } catch (InterruptedException e) {
-            log.error("Download interrupted: {}", e.getMessage());
-            return "Failed to get the response from the server.";
-        }
-
-        return response.toString();
-    }
-
-
 }

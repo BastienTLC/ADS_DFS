@@ -1,24 +1,26 @@
+// FileUploadHandler.java
 package com.grpc.server.fileupload.server.service;
 
-import com.devProblems.*;
-import com.google.protobuf.ByteString;
+import com.devProblems.FileUploadRequest;
+import com.devProblems.FileUploadResponse;
+import com.devProblems.UploadStatus;
+import com.devProblems.FileMetadata;
 import com.grpc.server.fileupload.server.utils.DiskFileStorage;
 import com.shared.proto.Constants;
+import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
-import net.devh.boot.grpc.server.service.GrpcService;
-import java.io.File;
+import org.springframework.stereotype.Service;
 
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 
+/**
+ * Service class for handling file uploads.
+ */
 @Slf4j
-@GrpcService
-public class FileUploadService extends FileUploadServiceGrpc.FileUploadServiceImplBase {
+@Service
+public class FileUploadService {
 
-    // This method is invoked when uploadFile is called from the client side
-    @Override
     public StreamObserver<FileUploadRequest> uploadFile(StreamObserver<FileUploadResponse> responseObserver) {
         FileMetadata fileMetadata = Constants.fileMetaContext.get(); // this is used at the end of the function to verify meta data
         DiskFileStorage diskFileStorage = new DiskFileStorage();
@@ -87,61 +89,4 @@ public class FileUploadService extends FileUploadServiceGrpc.FileUploadServiceIm
             }
         };
     }
-
-    // simple test method for testing various functionality
-    @Override
-    public void testMethod(FileDownloadRequest request, StreamObserver<FileTesting> responseObserver) {
-        String filename = request.getFileName();
-
-        FileTesting response = FileTesting.newBuilder()
-                .setText("Filename received: " + request.getFileName())
-                .build();
-
-        responseObserver.onNext(response);
-        responseObserver.onCompleted();
-    }
-
-    public void downloadFile(FileDownloadRequest request, StreamObserver<FileDownloadResponse> responseObserver) {
-        String filename = request.getFileName();
-        log.info("Received download request for filename: " + filename);
-
-        String filePath = "output/" + filename;
-        File file = new File(filePath);
-
-        if (!file.exists() || !file.isFile()) {
-            log.error("File not found: " + filename);
-            responseObserver.onError(io.grpc.Status.NOT_FOUND.withDescription("File not found").asRuntimeException());
-            return;
-        }
-
-        byte[] fiveKB = new byte[5120];
-        int length;
-
-        try (InputStream inputStream = new FileInputStream(file)) {
-            // reading bytes and sending them to the client
-            while ((length = inputStream.read(fiveKB)) > 0) {
-                log.info(String.format("Sending %d length of data", length));
-                com.devProblems.File fileMessage = com.devProblems.File.newBuilder()
-                        .setContent(ByteString.copyFrom(fiveKB, 0, length))
-                        .build();
-
-                FileDownloadResponse response = FileDownloadResponse.newBuilder()
-                        .setFile(fileMessage)  // Use the File message containing the content
-                        .build();
-
-                responseObserver.onNext(response);
-            }
-
-            // response is completed once all data is sent
-            responseObserver.onCompleted();
-
-        } catch (IOException e) {
-            log.error("Error reading file: " + filename, e);
-            responseObserver.onError(io.grpc.Status.INTERNAL.withDescription("Error reading file").asRuntimeException());
-        }
-    }
-
-
-
-
 }
