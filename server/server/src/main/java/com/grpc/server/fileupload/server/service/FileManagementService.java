@@ -3,6 +3,7 @@ package com.grpc.server.fileupload.server.service;
 
 import com.devProblems.FileDownloadRequest;
 import com.devProblems.FileMetadata;
+import com.devProblems.HealthCheckResponse;
 import com.devProblems.ListFilesResponse;
 import com.google.protobuf.Empty;
 import io.grpc.Status;
@@ -47,7 +48,6 @@ public class FileManagementService {
         responseObserver.onCompleted();
     }
 
-
     public void getFileMetadata(FileDownloadRequest request, StreamObserver<FileMetadata> responseObserver) {
         String filename = request.getFileName();
         String filePath = "output/" + filename;
@@ -65,6 +65,11 @@ public class FileManagementService {
                 .build();
 
         responseObserver.onNext(metadata);
+        responseObserver.onCompleted();
+    }
+
+    public void healthCheck(Empty request, StreamObserver<HealthCheckResponse> responseObserver) {
+        responseObserver.onNext(HealthCheckResponse.newBuilder().setStatus("Server is healthy").build());
         responseObserver.onCompleted();
     }
 }

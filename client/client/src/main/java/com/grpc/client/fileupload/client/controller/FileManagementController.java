@@ -23,9 +23,14 @@ public class FileManagementController {
     }
 
     //endpoint to list all files
-    @GetMapping("/files")
+        @GetMapping("/files")
     public List<FileMetadata> listFiles() {
         return this.fileManagementService.listFiles();
+    }
+
+    @GetMapping("/health")
+    public String health() {
+        return this.fileManagementService.health();
     }
 
     //endpoint to get metadata of a specific file

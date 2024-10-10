@@ -1,8 +1,12 @@
 package com.grpc.client.fileupload.client.service;
 
+import com.devProblems.FileOperations;
+import com.devProblems.FileOperationsServiceGrpc;
 import com.shared.proto.Constants;
 import com.devProblems.FileUploadServiceGrpc;
 import com.devProblems.FileMetadata;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
 import io.grpc.Metadata;
 import io.grpc.stub.MetadataUtils;
 import net.devh.boot.grpc.client.inject.GrpcClient;
@@ -15,6 +19,11 @@ public abstract class BaseFileService {
     // information to this particular stub
     @GrpcClient(value = "file-upload")
     protected FileUploadServiceGrpc.FileUploadServiceStub client;
+
+    @GrpcClient(value = "file-operations")
+    protected FileOperationsServiceGrpc.FileOperationsServiceBlockingStub blockingClient;
+
+
 
     // MetadataUtils attaches the metadata to the stub
     protected Metadata createMetadata(String fileName, int fileSize) {

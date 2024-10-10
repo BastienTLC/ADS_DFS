@@ -17,14 +17,13 @@ public class FileUploadServiceImpl extends FileUploadServiceGrpc.FileUploadServi
 
     private final FileUploadService fileUploadService;
     private final FileDownloadService fileDownloadService;
-    private final FileManagementService fileManagementService;
+
     private final FileTestService fileTestService;
 
 
     public FileUploadServiceImpl(FileUploadService fileUploadService, FileDownloadService fileDownloadService, FileManagementService fileManagementService, FileTestService fileTestService) {
         this.fileUploadService = fileUploadService;
         this.fileDownloadService = fileDownloadService;
-        this.fileManagementService = fileManagementService;
         this.fileTestService = fileTestService;
     }
 
@@ -46,15 +45,4 @@ public class FileUploadServiceImpl extends FileUploadServiceGrpc.FileUploadServi
         fileDownloadService.downloadFile(request, responseObserver);
     }
 
-    // Implementing listFiles RPC
-    @Override
-    public void listFiles(Empty request, StreamObserver<ListFilesResponse> responseObserver) {
-        fileManagementService.listFiles(request, responseObserver);
-    }
-
-    // Implementing getFileMetadata RPC
-    @Override
-    public void getFileMetadata(FileDownloadRequest request, StreamObserver<FileMetadata> responseObserver) {
-        fileManagementService.getFileMetadata(request, responseObserver);
-    }
 }

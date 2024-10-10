@@ -47,6 +47,10 @@ message ListFilesResponse {
   repeated FileMetadata files = 1;
 }
 
+message HealthCheckResponse {
+  string status = 1;
+}
+
 enum FileOperations {
   CREATE = 0;
   WRITE = 1;
@@ -54,10 +58,13 @@ enum FileOperations {
 }
 
 service FileUploadService {
-
   rpc uploadFile (stream FileUploadRequest) returns (FileUploadResponse) {}
   rpc downloadFile (FileDownloadRequest) returns (stream FileDownloadResponse) {} // new
-  rpc listFiles (google.protobuf.Empty) returns (stream ListFilesResponse) {}
-  rpc getFileMetadata (FileDownloadRequest) returns (FileMetadata) {}
   rpc testMethod (FileDownloadRequest) returns (FileTesting) {} // new
+}
+
+service FileOperationsService {
+  rpc listFiles (google.protobuf.Empty) returns (ListFilesResponse) {}
+  rpc getFileMetadata (FileDownloadRequest) returns (FileMetadata) {}
+  rpc healthCheck (google.protobuf.Empty) returns (HealthCheckResponse) {}
 }
