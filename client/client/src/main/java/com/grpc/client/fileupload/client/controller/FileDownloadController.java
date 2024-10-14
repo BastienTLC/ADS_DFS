@@ -19,7 +19,6 @@ public class FileDownloadController {
 
     // pretty sure we can use POST for all these methods
     @PostMapping("/download")
-    // change to return byte[] downloadFile later
     public String downloadFile(@RequestParam("file") String filename)  {
         return this.fileDownloadService.downloadFile(filename);
     }

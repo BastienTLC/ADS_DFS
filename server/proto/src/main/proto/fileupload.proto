@@ -57,6 +57,16 @@ enum FileOperations {
   CLOSE = 2;
 }
 
+// New for communication between nodes
+message NodeInfo {
+  string ip = 1;
+  string port = 2;
+}
+
+message NodesInfo {
+  repeated NodeInfo nodeList = 1;
+}
+
 service FileUploadService {
   rpc uploadFile (stream FileUploadRequest) returns (FileUploadResponse) {}
   rpc downloadFile (FileDownloadRequest) returns (stream FileDownloadResponse) {} // new
@@ -67,4 +77,9 @@ service FileOperationsService {
   rpc listFiles (google.protobuf.Empty) returns (ListFilesResponse) {}
   rpc getFileMetadata (FileDownloadRequest) returns (FileMetadata) {}
   rpc healthCheck (google.protobuf.Empty) returns (HealthCheckResponse) {}
+}
+
+service NodeOperationsService {
+  rpc joinRequest (NodeInfo) returns (NodesInfo) {};
+  rpc leaveRequest (NodesInfo) returns (google.protobuf.Empty) {};
 }

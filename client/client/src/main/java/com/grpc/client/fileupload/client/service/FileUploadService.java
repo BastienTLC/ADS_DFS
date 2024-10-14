@@ -17,7 +17,6 @@ import java.util.concurrent.CountDownLatch;
 
 @Slf4j
 @Service
-// perhaps we should rename this to FileManagementService later,
 // since we now have both an upload and download method
 public class FileUploadService extends BaseFileService {
 
