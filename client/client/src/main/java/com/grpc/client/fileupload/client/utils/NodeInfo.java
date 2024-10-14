@@ -1,4 +1,4 @@
-package cs.umu.se.ads.bootstrap;
+package com.grpc.client.fileupload.client.utils;
 
 public class NodeInfo {
     private String ip;

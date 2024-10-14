@@ -22,6 +22,8 @@ public class FileTestService extends BaseFileService {
         StringBuilder response = new StringBuilder();
         CountDownLatch countDownLatch = new CountDownLatch(1);
 
+        createChannelFromBootstrap(); // not fully implemented yet
+
         Metadata metadata = createMetadata(fileName);
         FileDownloadRequest request = FileDownloadRequest.newBuilder()
                 .setFileName(fileName)
