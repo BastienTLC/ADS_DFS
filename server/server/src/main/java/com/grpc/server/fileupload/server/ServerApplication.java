@@ -5,11 +5,14 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+
+import java.net.ServerSocket;
 
 @SpringBootApplication
 public class ServerApplication {
@@ -24,8 +27,6 @@ public class ServerApplication {
 		app.setDefaultProperties(properties);
 		app.run(args);
 		//register server to the bootstrap service
-		//still to be implemented duplicated port and port already in use by other service on the same machine
-		//exemple of command for checking if port is already in use : lsof -i :8085
 		registerServer(grpcPort);
 	}
 
@@ -44,8 +45,22 @@ public class ServerApplication {
 		}
 	}
 
+	private static boolean isPortAvailable(int port) {
+		try (ServerSocket socket = new ServerSocket(port)) {
+			socket.setReuseAddress(true);
+			return true;
+		} catch (IOException e) {
+			return false;
+		}
+	}
+
+	// generates random port and makes sure that it is available
 	private static int generateRandomPort() {
-		return (int) (Math.random() * 1000) + 9000;
+		int port;
+		do {
+			port = (int) (Math.random() * 1000) + 9000;
+		} while (!isPortAvailable(port));
+		return port;
 	}
 
 }

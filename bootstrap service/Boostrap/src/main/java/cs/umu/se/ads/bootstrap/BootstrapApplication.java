@@ -42,6 +42,8 @@ public class BootstrapApplication {
 
     @DeleteMapping("/removeServer")
     public ResponseEntity<String> deregisterServer(@RequestParam String ip, @RequestParam String port) {
+        System.out.println("Removing node '" + ip + ":" + port + "'");
+
         String nodeKey = ip + ":" + port;
 
         if (currentNodes.remove(nodeKey) == null) {
@@ -68,6 +70,8 @@ public class BootstrapApplication {
         int randomIndex = ThreadLocalRandom.current().nextInt(serverList.size());
         NodeInfo randomNode = serverList.get(randomIndex);
 
+        System.out.println("Returning random node: '" + randomNode.getIp() + ":" + randomNode.getPort()  + "'");
+
         return ResponseEntity.ok(randomNode);
     }
 
@@ -81,6 +85,9 @@ public class BootstrapApplication {
         int fileHash = Objects.hash(fileName);
         // Find the closest node to the hash by comparing the hash of the node
         NodeInfo selectedNode = findClosestNode(fileHash);
+
+        System.out.println("Returning the node: '" + selectedNode.getIp() + ":" + selectedNode.getPort()  + "'"
+            + " for the file: '" + fileName + "'" + "with the hash: " + fileHash);
 
         return ResponseEntity.ok(selectedNode);
     }
@@ -112,7 +119,6 @@ public class BootstrapApplication {
         //need to be implemented
         return ResponseEntity.ok(new ArrayList<>(currentNodes.values()));
     }
-
 
 
 
