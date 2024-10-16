@@ -14,6 +14,7 @@ public class FileOperationService extends BaseFileService {
 
 
     public List<FileMetadataModel> listFiles() {
+        createRandomChannelFromBootstrap();
         ListFilesResponse response = blockingClient.listFiles(Empty.newBuilder().build());
         List<FileMetadataModel> files = new ArrayList<>();
         response.getFilesList().forEach(file -> {
@@ -24,6 +25,7 @@ public class FileOperationService extends BaseFileService {
 
     public FileMetadata getFileMetadata(FileDownloadRequest request) {
         try {
+            createDeterministicChannelFromBootstrap(request.getFileName());
             return blockingClient.getFileMetadata(request);
         } catch (Exception e) {
             log.error("Error occurred while getting file metadata: {}", e.toString());
@@ -32,6 +34,7 @@ public class FileOperationService extends BaseFileService {
     }
 
     public String health() {
+        createRandomChannelFromBootstrap();
         try {
             return blockingClient.healthCheck(Empty.newBuilder().build()).getStatus();
         } catch (Exception e) {

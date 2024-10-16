@@ -72,4 +72,34 @@ public class BootstrapApplication {
     }
 
 
+    @GetMapping("/getNodeForFile")
+    public ResponseEntity<NodeInfo> getNodeForFile(@RequestParam String fileName) {
+        if (currentNodes.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        }
+        int fileHash = Objects.hash(fileName);
+        NodeInfo selectedNode = findClosestNode(fileHash);
+
+        return ResponseEntity.ok(selectedNode);
+    }
+
+
+    private NodeInfo findClosestNode(int fileHash) {
+        NodeInfo closestNode = null;
+        int closestDistance = Integer.MAX_VALUE;
+
+        for (NodeInfo node : currentNodes.values()) {
+            int nodeHash = node.getHashCode();
+            int distance = Math.abs(nodeHash - fileHash);
+
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestNode = node;
+            }
+        }
+
+        return closestNode;
+    }
+
+
 }

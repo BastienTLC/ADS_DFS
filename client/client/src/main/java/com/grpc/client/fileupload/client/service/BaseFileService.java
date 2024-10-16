@@ -41,12 +41,46 @@ public abstract class BaseFileService {
         }
     }
 
+    private NodeInfo getNodeByHash(String fileName) {
+        String url = bootstrapUrl + "/getNodeForFile?fileName=" + fileName;
+        try {
+            return restTemplate.getForObject(url, NodeInfo.class);
+        } catch (Exception e) {
+            System.err.println("Failed to get a node by hash from bootstrap: " + e.getMessage());
+            return null;
+        }
+    }
+
+    protected void setBlockingClient(NodeInfo nodeInfo) {
+        String serverIp = nodeInfo.getIp();
+        int serverPort = Integer.parseInt(nodeInfo.getPort());
+
+        ManagedChannel channel = ManagedChannelBuilder.forAddress(serverIp, serverPort)
+                .usePlaintext()
+                .build();
+
+        blockingClient = FileOperationsServiceGrpc.newBlockingStub(channel);
+
+    }
+
+    protected void setClient(NodeInfo nodeInfo) {
+        String serverIp = nodeInfo.getIp();
+        int serverPort = Integer.parseInt(nodeInfo.getPort());
+
+        ManagedChannel channel = ManagedChannelBuilder.forAddress(serverIp, serverPort)
+                .usePlaintext()
+                .build();
+
+        client = FileUploadServiceGrpc.newStub(channel);
+    }
+
+
     // This should be called upon initializing client.
     // Currently thinking that the server node will be chosen randomly for the client,
     // and all further requests will be with that node.
     // However, the distributed storing part will be managed after the receiving node has received the data,
     // and will be done based on the filename(?) where a distributed hashing table will be involved.
-    protected void createChannelFromBootstrap() {
+    protected void createRandomChannelFromBootstrap() {
         NodeInfo randomServer = getRandomServer();
         if (randomServer == null) {
             throw new RuntimeException("Could not retrieve server information from the bootstrap service.");
@@ -57,10 +91,26 @@ public abstract class BaseFileService {
 
         System.out.println("Successfully retrieved " + serverIp + ":" + serverPort);
 
-//        return ManagedChannelBuilder.forAddress(serverIp, serverPort)
-//                .usePlaintext()
-//                .build();
+        this.setBlockingClient(randomServer);
+        this.setClient(randomServer);
     }
+
+    protected void createDeterministicChannelFromBootstrap(String fileName) {
+        NodeInfo nodeInfo = getNodeByHash(fileName);
+        if (nodeInfo == null) {
+            throw new RuntimeException("Could not retrieve server information from the bootstrap service.");
+        }
+
+        String serverIp = nodeInfo.getIp();
+        int serverPort = Integer.parseInt(nodeInfo.getPort());
+
+        System.out.println("Successfully retrieved " + serverIp + ":" + serverPort);
+
+        this.setBlockingClient(nodeInfo);
+        this.setClient(nodeInfo);
+    }
+
+
 
 
 

@@ -4,6 +4,7 @@ package com.grpc.client.fileupload.client.service;
 import com.devProblems.*;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Empty;
+import com.grpc.client.fileupload.client.utils.NodeInfo;
 import io.grpc.Metadata;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
@@ -43,6 +44,9 @@ public class FileUploadService extends BaseFileService {
         CountDownLatch countDownLatch = new CountDownLatch(1);
 
         Metadata metadata = createMetadata(fileName, fileSize);
+
+        // setting up the channel
+        super.createRandomChannelFromBootstrap();
 
         // using fileUploadRequestStreamObserver we will stream the file content to the server
         StreamObserver<FileUploadRequest> fileUploadRequestStreamObserver = this.client

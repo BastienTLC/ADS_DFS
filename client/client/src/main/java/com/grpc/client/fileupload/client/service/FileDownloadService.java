@@ -5,6 +5,7 @@ package com.grpc.client.fileupload.client.service;
 import com.devProblems.FileDownloadRequest;
 import com.devProblems.FileDownloadResponse;
 import com.grpc.client.fileupload.client.utils.DiskFileStorage;
+import com.grpc.client.fileupload.client.utils.NodeInfo;
 import io.grpc.Metadata;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
@@ -30,6 +31,9 @@ public class FileDownloadService extends BaseFileService {
                 .build();
 
         DiskFileStorage diskFileStorage = new DiskFileStorage();
+
+        //setting up the channel
+        super.createRandomChannelFromBootstrap();
 
         client.withInterceptors(MetadataUtils.newAttachHeadersInterceptor(metadata))
                 .downloadFile(request, new StreamObserver<FileDownloadResponse>() {
