@@ -15,6 +15,7 @@ import java.util.Map;
 public class ServerApplication {
 
 	public static void main(String[] args) {
+		//generate random port between 9000 and 9999
 		int grpcPort = generateRandomPort();
 		SpringApplication app = new SpringApplication(ServerApplication.class);
 		Map<String, Object> properties = new HashMap<>();
@@ -22,6 +23,9 @@ public class ServerApplication {
 		properties.put("grpc.server.port", grpcPort);
 		app.setDefaultProperties(properties);
 		app.run(args);
+		//register server to the bootstrap service
+		//still to be implemented duplicated port and port already in use by other service on the same machine
+		//exemple of command for checking if port is already in use : lsof -i :8085
 		registerServer(grpcPort);
 	}
 

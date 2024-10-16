@@ -77,11 +77,43 @@ public class BootstrapApplication {
         if (currentNodes.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         }
+        // Compute hash of the file name
         int fileHash = Objects.hash(fileName);
+        // Find the closest node to the hash by comparing the hash of the node
         NodeInfo selectedNode = findClosestNode(fileHash);
 
         return ResponseEntity.ok(selectedNode);
     }
+
+    //function to get the replica nodes for a file
+    //The function will return all the nodes except the selected node
+    //Need to implement other strategies for replica selection
+    @GetMapping("/getReplicaNodes")
+    public ResponseEntity<List<NodeInfo>> getReplicaNodes(@RequestParam String fileName) {
+        if (currentNodes.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        }
+        // Compute hash of the file name
+        int fileHash = Objects.hash(fileName);
+        // Find the closest node to the hash by comparing the hash of the node
+        NodeInfo selectedNode = findClosestNode(fileHash);
+        List<NodeInfo> replicaNodes = new ArrayList<>();
+        for (NodeInfo node : currentNodes.values()) {
+            if (!node.equals(selectedNode)) {
+                replicaNodes.add(node);
+            }
+        }
+
+        return ResponseEntity.ok(replicaNodes);
+    }
+
+    @GetMapping("/getReplicaNode")
+    public ResponseEntity<List<NodeInfo>> getReplicaNodes(@RequestParam String fileName, @RequestParam int replicaNb){
+        //need to be implemented
+        return ResponseEntity.ok(new ArrayList<>(currentNodes.values()));
+    }
+
+
 
 
     private NodeInfo findClosestNode(int fileHash) {

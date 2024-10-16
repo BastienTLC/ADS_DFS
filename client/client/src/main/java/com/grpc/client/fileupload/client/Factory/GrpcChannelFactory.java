@@ -12,6 +12,9 @@ public class GrpcChannelFactory {
 
     private final Map<String, ManagedChannel> channels = new HashMap<>();
 
+    // This method is used to create a channel to the server with the given IP and port
+    // If a channel to the server with the given IP and port already exists, it returns the existing channel
+    // Otherwise, it creates a new channel and returns it
     public ManagedChannel getChannel(String ip, int port) {
         String key = ip + ":" + port;
         if (channels.containsKey(key)) {

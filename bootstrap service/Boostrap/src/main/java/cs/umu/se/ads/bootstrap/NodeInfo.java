@@ -14,9 +14,10 @@ public class NodeInfo {
 
     }
 
+    //function to compute the hashcode of the node based on the ip and port
     private int computeHashCode() {
         String key = ip + ":" + port;
-        return Objects.hash(key);  // Utilisation du hash de la chaîne "ip:port"
+        return Objects.hash(key);
     }
 
     public String getIp() {

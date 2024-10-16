@@ -13,7 +13,7 @@ public class BootstrapService {
 
     private final RestTemplate restTemplate;
     private final String bootstrapUrl;
-
+    // Here the service to interact with the bootstrap server is defined in application.yml
     public BootstrapService(RestTemplate restTemplate, @Value("${bootstrap.url}") String bootstrapUrl) {
         this.restTemplate = restTemplate;
         this.bootstrapUrl = bootstrapUrl;

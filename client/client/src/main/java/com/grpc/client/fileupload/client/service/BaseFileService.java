@@ -26,19 +26,23 @@ public abstract class BaseFileService {
     @Autowired
     private BootstrapService bootstrapService;
 
+    // This is the client stub for the FileUploadService used to upload and download files
     protected FileUploadServiceGrpc.FileUploadServiceStub client;
+    // This is the blocking client stub for the FileOperationsService used to list files and get file metadata
     protected FileOperationsServiceGrpc.FileOperationsServiceBlockingStub blockingClient;
 
+    // This method is used to create or changed channel to the server with the given IP and port
     protected void setBlockingClient(NodeInfo nodeInfo) {
         ManagedChannel channel = grpcChannelFactory.getChannel(nodeInfo.getIp(), Integer.parseInt(nodeInfo.getPort()));
         blockingClient = FileOperationsServiceGrpc.newBlockingStub(channel);
     }
-
+    // same but for the client
     protected void setClient(NodeInfo nodeInfo) {
         ManagedChannel channel = grpcChannelFactory.getChannel(nodeInfo.getIp(), Integer.parseInt(nodeInfo.getPort()));
         client = FileUploadServiceGrpc.newStub(channel);
     }
 
+    // Set the client and blocking client channel to a random server
     protected void createRandomChannelFromBootstrap() {
         NodeInfo randomServer = bootstrapService.getRandomServer();
         if (randomServer == null) {
@@ -49,6 +53,7 @@ public abstract class BaseFileService {
         this.setClient(randomServer);
     }
 
+    // Set the client and blocking client channel to a server with the given hash
     protected void createDeterministicChannelFromBootstrap(String fileName) {
         NodeInfo nodeInfo = bootstrapService.getNodeByHash(fileName);
         if (nodeInfo == null) {
@@ -59,6 +64,7 @@ public abstract class BaseFileService {
         this.setClient(nodeInfo);
     }
 
+    // Set the client and blocking client channel to a server with the given IP and port
     protected void createChannel(String ip, String port) {
         ManagedChannel channel = grpcChannelFactory.getChannel(ip, Integer.parseInt(port));
         client = FileUploadServiceGrpc.newStub(channel);
