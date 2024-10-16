@@ -6,3 +6,5 @@ grpc:
     file-operations:
       address: "static://localhost:9090"
       negotiationType: plaintext
+bootstrap:
+  url: http://127.0.0.1:8085

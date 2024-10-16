@@ -2,6 +2,7 @@ package com.grpc.client.fileupload.client.service;
 import com.devProblems.*;
 import com.grpc.client.fileupload.client.model.FileMetadataModel;
 import com.google.protobuf.Empty;
+import com.grpc.client.fileupload.client.utils.NodeInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -12,6 +13,13 @@ import java.util.List;
 @Service
 public class FileOperationService extends BaseFileService {
 
+
+    private final BootstrapService bootstrapService;
+
+    public FileOperationService(BootstrapService bootstrapService) {
+        super();
+        this.bootstrapService = bootstrapService;
+    }
 
     public List<FileMetadataModel> listFiles() {
         createRandomChannelFromBootstrap();
@@ -41,6 +49,20 @@ public class FileOperationService extends BaseFileService {
             log.error("Error occurred while checking health: {}", e.toString());
             return null;
         }
+    }
+
+    public List<String> healths() {
+        List<NodeInfo> nodeInfos = bootstrapService.getAllServers();
+        List<String> statuses = new ArrayList<>();
+        for (NodeInfo nodeInfo : nodeInfos) {
+            createChannel(nodeInfo.getIp(), nodeInfo.getPort());
+            try {
+                statuses.add(blockingClient.healthCheck(Empty.newBuilder().build()).getStatus());
+            } catch (Exception e) {
+                statuses.add("Error occurred while checking health: " + e.toString());
+            }
+        }
+        return statuses;
     }
 }
 

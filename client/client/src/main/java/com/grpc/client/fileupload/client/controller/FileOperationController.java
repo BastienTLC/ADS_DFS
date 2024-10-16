@@ -31,6 +31,11 @@ public class FileOperationController {
         return this.fileOperationService.health();
     }
 
+    @GetMapping("/healths")
+    public List<String> healths() {
+        return this.fileOperationService.healths();
+    }
+
     //endpoint to get metadata of a specific file
     @GetMapping("/{fileName}/metadata")
     public FileMetadataModel getFileMetadata(@PathVariable("fileName") String fileName) {
