@@ -53,6 +53,15 @@
 			<version>3.21.7</version>
 		</dependency>
 
+
+		<dependency>
+			<groupId>de.uniba.wiai.lspi.chord</groupId>
+			<artifactId>chord</artifactId>
+			<version>1.0</version>
+			<scope>system</scope>
+			<systemPath>${project.basedir}/lib/openchord_1.0.5.jar</systemPath>
+		</dependency>
+
 	</dependencies>
 
 </project>
