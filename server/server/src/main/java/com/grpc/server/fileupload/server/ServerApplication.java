@@ -80,7 +80,6 @@ public class ServerApplication {
 		URL bootstrapURL = null;
 		try {
 			bootstrapURL = new URL(protocol + "://" + bootstrapHost + ":" + bootstrapPort + "/");
-			System.out.println("Chord network joined at: " + localURL);
 		} catch (MalformedURLException e) {
 			throw new RuntimeException("Invalid URL of bootstrap node", e);
 		}
@@ -88,6 +87,7 @@ public class ServerApplication {
 		Chord chord = new ChordImpl();
 		try{
 			chord.join(localURL, bootstrapURL);
+			System.out.println("Chord network joined at: " + bootstrapURL);
 		} catch (ServiceException e) {
 			throw new RuntimeException("Could not join Chord network!", e);
 		}
