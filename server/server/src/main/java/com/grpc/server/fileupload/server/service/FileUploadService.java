@@ -5,6 +5,7 @@ import com.devProblems.*;
 import com.google.protobuf.Empty;
 import com.grpc.server.fileupload.server.utils.DiskFileStorage;
 import com.shared.proto.Constants;
+import de.uniba.wiai.lspi.chord.service.Chord;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,9 +19,9 @@ import java.io.IOException;
 @Service
 public class FileUploadService {
 
-    public StreamObserver<FileUploadRequest> uploadFile(StreamObserver<FileUploadResponse> responseObserver) {
+    public StreamObserver<FileUploadRequest> uploadFile(StreamObserver<FileUploadResponse> responseObserver, Chord chord) {
         FileMetadata fileMetadata = Constants.fileMetaContext.get(); // this is used at the end of the function to verify meta data
-        DiskFileStorage diskFileStorage = new DiskFileStorage();
+        DiskFileStorage diskFileStorage = new DiskFileStorage(chord);
         return new StreamObserver<>() {
             @Override
             // this method will write the bytes to the byte array stream that we have created in the diskFileStorage
@@ -54,7 +55,7 @@ public class FileUploadService {
                     // it is the same that the server has received
                     if (totalBytesReceived == fileMetadata.getContentLength()) {
                         // if matches we write to the diskFileStorage
-                        diskFileStorage.write(fileMetadata.getFileNameWithType());
+                        diskFileStorage.writeOnTheRing(fileMetadata.getFileNameWithType());
                         diskFileStorage.close();
                     } else {
                         // notifying the client with error
