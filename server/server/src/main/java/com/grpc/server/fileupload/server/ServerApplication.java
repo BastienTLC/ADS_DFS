@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.MalformedURLException;
+import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -14,19 +15,26 @@ import de.uniba.wiai.lspi.chord.service.Chord;
 import de.uniba.wiai.lspi.chord.service.PropertiesLoader;
 import de.uniba.wiai.lspi.chord.service.ServiceException;
 import de.uniba.wiai.lspi.chord.service.impl.ChordImpl;
+import org.springframework.boot.ApplicationArguments;
 import org.springframework.context.annotation.Bean;
+import org.springframework.web.client.RestTemplate;
 
 @SpringBootApplication
 public class ServerApplication {
 
 	public static void main(String[] args) {
+		int httpPort = findAvailablePort(8000, 9000);
+		System.setProperty("server.port", String.valueOf(httpPort+1));
+		SpringApplication.run(ServerApplication.class, args);
+	}
+
+	@Bean
+	public Chord chord(ApplicationArguments args) {
 		boolean isBootstrapNode = false;
 		String bootstrapAddress = null;
 
 		// Parse command-line arguments
-		//if it is a bootstrap node, then it will be the first node in the network
-		//if it is not a bootstrap node, then it will join the network so specify the bootstrap node address
-		for (String arg : args) {
+		for (String arg : args.getSourceArgs()) {
 			if (arg.equalsIgnoreCase("bootstrap")) {
 				isBootstrapNode = true;
 			} else if (arg.startsWith("bootstrapAddress=")) {
@@ -46,13 +54,8 @@ public class ServerApplication {
 		int chordPort = findAvailablePort(8000, 9000);
 		int grpcPort = findAvailablePort(9001, 10000);
 
-		// Start Spring Boot application with custom properties
-		SpringApplication app = new SpringApplication(ServerApplication.class);
-		Map<String, Object> properties = new HashMap<>();
-		properties.put("server.port", grpcPort + 1); // For HTTP server if needed
-		properties.put("grpc.server.port", grpcPort);
-		app.setDefaultProperties(properties);
-		app.run(args);
+		// Set grpc.server.port property so that gRPC server picks it up
+		System.setProperty("grpc.server.port", String.valueOf(grpcPort));
 
 		Chord chord;
 		if (isBootstrapNode) {
@@ -64,10 +67,12 @@ public class ServerApplication {
 			}
 			chord = joinChordNetwork(host, chordPort, bootstrapAddress);
 		}
+		registerServer(grpcPort);
+		return chord;
 	}
 
 	// Initialize the Chord network (only for the first node)
-	public static Chord initializeChordNetwork(String host, int port) {
+	private Chord initializeChordNetwork(String host, int port) {
 		PropertiesLoader.loadPropertyFile(); // Ensure Chord properties are loaded
 
 		String protocol = URL.KNOWN_PROTOCOLS.get(URL.SOCKET_PROTOCOL);
@@ -90,7 +95,7 @@ public class ServerApplication {
 	}
 
 	// Join an existing Chord network
-	public static Chord joinChordNetwork(String host, int port, String bootstrapAddress) {
+	private Chord joinChordNetwork(String host, int port, String bootstrapAddress) {
 		PropertiesLoader.loadPropertyFile();
 		String protocol = URL.KNOWN_PROTOCOLS.get(URL.SOCKET_PROTOCOL);
 
@@ -119,6 +124,21 @@ public class ServerApplication {
 		return chord;
 	}
 
+	private static void registerServer(int grpcPort) {
+		RestTemplate restTemplate = new RestTemplate();
+		String bootstrapUrl = "http://127.0.0.1:8085/addServer";
+
+		try {
+			String serverIp = InetAddress.getLocalHost().getHostAddress();
+			String url = String.format("%s?ip=%s&port=%d", bootstrapUrl, serverIp, grpcPort);
+			restTemplate.postForObject(url, null, String.class);
+		} catch (UnknownHostException e) {
+			System.out.println("Error while registering server to the bootstrap service: " + e.getMessage());
+		} catch (Exception e) {
+			System.out.println("Error while registering server to the bootstrap service: " + e.getMessage());
+		}
+	}
+
 	// Method to find an available port within a given range
 	private static int findAvailablePort(int minPort, int maxPort) {
 		for (int port = minPort; port <= maxPort; port++) {
@@ -137,12 +157,5 @@ public class ServerApplication {
 		} catch (IOException e) {
 			return false;
 		}
-	}
-
-	@Bean
-	public Chord chord() {
-		Chord chord = new ChordImpl();
-		// Initialize the Chord instance as needed
-		return chord;
 	}
 }
