@@ -1,5 +1,7 @@
 package com.grpc.server.fileupload.server;
 
+import io.grpc.Server;
+import io.grpc.ServerBuilder;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import java.io.IOException;
@@ -10,6 +12,10 @@ import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.grpc.server.fileupload.server.base.ChordNode;
+import com.grpc.server.fileupload.server.base.ChordServiceImpl;
+import com.grpc.server.fileupload.server.base.ScheduledTask;
+
 import de.uniba.wiai.lspi.chord.data.URL;
 import de.uniba.wiai.lspi.chord.service.Chord;
 import de.uniba.wiai.lspi.chord.service.PropertiesLoader;
@@ -18,6 +24,9 @@ import de.uniba.wiai.lspi.chord.service.impl.ChordImpl;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.client.RestTemplate;
+
+
+// import com.devProblems.example.grpc.chord.ChordGrpc.*; // this is how the generated chord proto files should be imported
 
 @SpringBootApplication
 public class ServerApplication {
@@ -29,16 +38,40 @@ public class ServerApplication {
 	}
 
 	@Bean
-	public Chord chord(ApplicationArguments args) {
+	// changed to return void for now
+	public void chord(ApplicationArguments args) {
 		boolean isBootstrapNode = false;
-		String bootstrapAddress = null;
+		String joinIp = null;
+		int joinPort = -1;
+		boolean multiThreadingEnabled = false;
 
 		// Parse command-line arguments
 		for (String arg : args.getSourceArgs()) {
-			if (arg.equalsIgnoreCase("bootstrap")) {
-				isBootstrapNode = true;
-			} else if (arg.startsWith("bootstrapAddress=")) {
-				bootstrapAddress = arg.substring("bootstrapAddress=".length());
+			switch (arg) {
+				case "-bootstrap":
+					isBootstrapNode = true;
+					break;
+				case "-joinIp":
+					if (args.containsOption("-joinIp")) {
+						joinIp = args.getOptionValues("-joinIp").get(0);
+					}
+					break;
+				case "-joinPort":
+					if (args.containsOption("-joinPort")) {
+						try {
+							joinPort = Integer.parseInt(args.getOptionValues("-joinPort").get(0));
+						} catch (NumberFormatException e) {
+							System.err.println("Invalid join port number: " + args.getOptionValues("-joinPort").get(0));
+							System.exit(1);
+						}
+					}
+					break;
+				case "-multiThreading":
+					multiThreadingEnabled = true;
+					break;
+				default:
+					System.err.println("Unknown argument: " + arg);
+					break;
 			}
 		}
 
@@ -57,19 +90,55 @@ public class ServerApplication {
 		// Set grpc.server.port property so that gRPC server picks it up
 		System.setProperty("grpc.server.port", String.valueOf(grpcPort));
 
-		Chord chord;
-		if (isBootstrapNode) {
-			chord = initializeChordNetwork(host, chordPort);
+		// Create the ChordNode
+		ChordNode node = new ChordNode(host, chordPort, multiThreadingEnabled);
+		ScheduledTask scheduledTask = new ScheduledTask(node);
+
+		// Start the gRPC server
+		ChordServiceImpl service = new ChordServiceImpl(node);
+		Server server = ServerBuilder.forPort(chordPort)
+				.addService(service)
+				.maxInboundMessageSize(1000000000)
+				.build();
+
+		// server.start();
+
+		System.out.println("Node " + node.getNodeId() + " started on " + host + ":" + chordPort);
+
+		// Join the network
+		if (joinIp != null && joinPort != -1) {
+			// Join the network existing node
+			// node.join(existingNodeIp, existingNodePort);
+			// System.out.println("Node joined the network via " + existingNodeIp + ":" + existingNodePort);
 		} else {
-			if (bootstrapAddress == null) {
+			if (!isBootstrapNode) {
 				System.err.println("Bootstrap address must be provided to join an existing Chord network.");
 				System.exit(1);
 			}
-			chord = joinChordNetwork(host, chordPort, bootstrapAddress);
+			// First node in the network boorstrap
+			// node.join(null, -1);
+			System.out.println("First node in the network initialized.");
 		}
-		registerServer(grpcPort);
-		return chord;
+
+
+		// scheduledTask.startScheduledTask();
+
+		// Keep the server running
+//		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+//			System.out.println("Shutting down the gRPC server...");
+//			scheduledTask.stopScheduledTask();
+//			node.leave();
+//			node.shutdown();
+//			server.shutdown();
+//		}));
+//
+//		server.awaitTermination();
+
+//		registerServer(grpcPort);
+//		return chord;
+
 	}
+
 
 	// Initialize the Chord network (only for the first node)
 	private Chord initializeChordNetwork(String host, int port) {

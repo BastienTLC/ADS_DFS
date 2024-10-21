@@ -58,6 +58,7 @@ enum FileOperations {
 }
 
 // New for communication between nodes
+// might need to change NodeInfo to something else since it might overlap with chord.proto otherwise
 message NodeInfo {
   string ip = 1;
   string port = 2;
