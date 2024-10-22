@@ -12,7 +12,7 @@ import java.util.List;
 public class FingerTable {
     private final List<NodeHeader> fingers;
     private final ChordNode localNode;
-    private final int m; // Nombre de bits finger table
+    private final int m;
 
     public FingerTable(ChordNode localNode, int m) {
         this.localNode = localNode;

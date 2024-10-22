@@ -1,10 +1,7 @@
 // FileUploadService.java
-package com.grpc.client.fileupload.client.service;
+package com.grpc.server.fileupload.server.client;
 
-import com.devProblems.*;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.Empty;
-import com.grpc.client.fileupload.client.utils.NodeInfo;
 import io.grpc.Metadata;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
@@ -19,7 +16,7 @@ import java.util.concurrent.CountDownLatch;
 @Slf4j
 @Service
 // since we now have both an upload and download method
-public class FileUploadService extends BaseFileService {
+public class FileUploadClient extends BaseFileService {
 
     public String uploadFile(final MultipartFile multipartFile) {
         String fileName; // provided by client

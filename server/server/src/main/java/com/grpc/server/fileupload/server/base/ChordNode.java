@@ -1,6 +1,8 @@
 package com.grpc.server.fileupload.server.base;
 
 
+import com.devProblems.Fileupload;
+import com.grpc.server.fileupload.server.types.FileMetadataModel;
 import com.grpc.server.fileupload.server.types.Message;
 import com.grpc.server.fileupload.server.types.NodeHeader;
 import com.grpc.server.fileupload.server.chordUtils.Wrapper;
@@ -279,7 +281,7 @@ public class ChordNode {
         }
     }
 
-    public void storeMessageInChord(String key, Message message) {
+    public void storeFileInChord(String key, FileMetadataModel fileMetadata) {
         Runnable task = () -> {
             // Hash the key
             String keyId = hashNode(key);

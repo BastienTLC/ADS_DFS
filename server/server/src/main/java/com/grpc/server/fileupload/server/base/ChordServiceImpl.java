@@ -1,19 +1,28 @@
 package com.grpc.server.fileupload.server.base;
 
-import com.example.grpc.chord.*;
-import com.example.grpc.chord.ChordGrpc.ChordImplBase;
+import com.devProblems.Fileupload.*;
+import com.devProblems.ChordGrpc.*;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Empty;
+import com.grpc.server.fileupload.server.chordUtils.ChordHash;
+import com.grpc.server.fileupload.server.impl.FileUploadServiceImpl;
+import com.grpc.server.fileupload.server.service.FileUploadService;
+import com.grpc.server.fileupload.server.types.FileMetadataModel;
+import com.grpc.server.fileupload.server.utils.DiskFileStorage;
+import com.shared.proto.Constants;
 import io.grpc.stub.StreamObserver;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.Arrays;
 
-import com.example.grpc.chord.ChordProto.*;
 import com.grpc.server.fileupload.server.types.NodeHeader;
 import com.grpc.server.fileupload.server.chordUtils.Wrapper;
 
 
 public class ChordServiceImpl extends ChordImplBase {
     private final ChordNode chordNode;
+    private FileUploadServiceImpl fileUploadService;
 
     public ChordServiceImpl(ChordNode chordNode) {
         this.chordNode = chordNode;
@@ -186,9 +195,84 @@ public class ChordServiceImpl extends ChordImplBase {
         responseObserver.onNext(responseBuilder.build());
         responseObserver.onCompleted();
     }
-
     @Override
-    public void storeMessageInChord(StoreMessageRequest request, StreamObserver<StoreMessageResponse> responseObserver) {
+    public StreamObserver<FileUploadRequest> storeFile(StreamObserver<FileUploadResponse> responseObserver) {
+        FileMetadata fileMetadata = Constants.fileMetaContext.get(); // this is used at the end of the function to verify meta data
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        return new StreamObserver<>() {
+
+            @Override
+            // this method will write the bytes to the byte array stream that we have created in the diskFileStorage
+            public void onNext(FileUploadRequest fileUploadRequest) {
+                // called so we can compare that received data matches the data sent
+                System.out.println(String.format("received %d length of data", fileUploadRequest.getFile().getContent().size()));
+                try {
+                    fileUploadRequest.getFile().getContent()
+                            .writeTo(byteArrayOutputStream);
+                } catch (IOException e) {
+                    // this is invoking the clients on error method
+                    responseObserver.onError(io.grpc.Status.INTERNAL
+                            .withDescription("cannot write data due to : " + e.getMessage())
+                            .asRuntimeException());
+                }
+            }
+
+            @Override
+            // called when client sends error
+            public void onError(Throwable throwable) {
+                System.out.println("Error occurred while uploading file: " + throwable.toString());
+            }
+
+            @Override
+            // called when client has finished sending data
+            public void onCompleted() {
+
+                try {
+                    int totalBytesReceived = byteArrayOutputStream.size();
+                    // the reason why we create the fileMetadata object was to validate here that
+                    // it is the same that the server has received
+                    if (totalBytesReceived == fileMetadata.getContentLength()) {
+                        // if matches we write to the diskFileStorage
+                        //Fichier
+                        FileMetadataModel file = new FileMetadataModel(fileMetadata.getFileNameWithType(), byteArrayOutputStream.size());
+
+                        //Name
+                        String name = fileMetadata.getFileNameWithType();
+                        byteArrayOutputStream.close();
+                        chordNode.storeFileInChord(name, file);
+                    } else {
+                        // notifying the client with error
+                        responseObserver.onError(
+                                io.grpc.Status.FAILED_PRECONDITION
+                                        .withDescription(String.format("expected %d but received %d", fileMetadata.getContentLength(), totalBytesReceived))
+                                        .asRuntimeException()
+                        );
+                        return;
+                    }
+                } catch (IOException e) {
+                    // notifying the client with error
+                    responseObserver.onError(io.grpc.Status.INTERNAL
+                            .withDescription("cannot save data due to : " + e.getMessage())
+                            .asRuntimeException());
+                    return;
+                }
+
+                // if there were no errors, we notify the client by calling the onNext method and sending
+                // the FileUploadResponse
+                responseObserver.onNext(
+                        FileUploadResponse
+                                .newBuilder()
+                                .setFileName(fileMetadata.getFileNameWithType())
+                                .setUploadStatus(UploadStatus.SUCCESS)
+                                .build()
+                );
+                responseObserver.onCompleted();
+            }
+        };
+    }
+
+    /*@Override
+    public void storeMessageInChord(StoreFileRequest request, StreamObserver<StoreFileResponse> responseObserver) {
         String key = request.getKey();
         Message messageRpc = request.getMessage();
         com.grpc.server.fileupload.server.types.Message message = Wrapper.wrapGrpcMessageToMessage(messageRpc);
@@ -200,7 +284,7 @@ public class ChordServiceImpl extends ChordImplBase {
                 .build();
         responseObserver.onNext(response);
         responseObserver.onCompleted();
-    }
+    }*/
 
     @Override
     public void retrieveMessageFromChord(RetrieveMessageRequest request, StreamObserver<RetrieveMessageResponse> responseObserver) {

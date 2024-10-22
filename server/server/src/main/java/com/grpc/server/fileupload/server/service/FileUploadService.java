@@ -1,7 +1,7 @@
 // FileUploadHandler.java
 package com.grpc.server.fileupload.server.service;
 
-import com.devProblems.*;
+import com.devProblems.Fileupload.*;
 import com.google.protobuf.Empty;
 import com.grpc.server.fileupload.server.utils.DiskFileStorage;
 import com.shared.proto.Constants;
@@ -19,9 +19,9 @@ import java.io.IOException;
 @Service
 public class FileUploadService {
 
-    public StreamObserver<FileUploadRequest> uploadFile(StreamObserver<FileUploadResponse> responseObserver, Chord chord) {
+    public StreamObserver<FileUploadRequest> uploadFile(StreamObserver<FileUploadResponse> responseObserver) {
         FileMetadata fileMetadata = Constants.fileMetaContext.get(); // this is used at the end of the function to verify meta data
-        DiskFileStorage diskFileStorage = new DiskFileStorage(chord);
+        DiskFileStorage diskFileStorage = new DiskFileStorage();
         return new StreamObserver<>() {
             @Override
             // this method will write the bytes to the byte array stream that we have created in the diskFileStorage
@@ -55,7 +55,7 @@ public class FileUploadService {
                     // it is the same that the server has received
                     if (totalBytesReceived == fileMetadata.getContentLength()) {
                         // if matches we write to the diskFileStorage
-                        diskFileStorage.writeOnTheRing(fileMetadata.getFileNameWithType());
+                        diskFileStorage.write(fileMetadata.getFileNameWithType());
                         diskFileStorage.close();
                     } else {
                         // notifying the client with error

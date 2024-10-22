@@ -1,4 +1,4 @@
-package com.grpc.server.fileupload.server;
+package com.grpc.server.fileupload.server.impl;
 
 import com.devProblems.*;
 import com.google.protobuf.Empty;

@@ -1,15 +1,17 @@
 package com.grpc.server.fileupload.server.base;
 
-import com.example.grpc.chord.*;
+import com.devProblems.ChordGrpc.*;
+import com.devProblems.Fileupload.*;
 import com.google.protobuf.Empty;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
-import com.example.grpc.chord.ChordProto.*;
 import com.grpc.server.fileupload.server.types.NodeHeader;
 
+import static com.devProblems.ChordGrpc.newBlockingStub;
+
 public class ChordClient {
-    private final ChordGrpc.ChordBlockingStub blockingStub;
+    private final ChordBlockingStub blockingStub;
     private final ManagedChannel channel;
 
     public ChordClient(String ip, int port) {
@@ -17,8 +19,9 @@ public class ChordClient {
         channel = ManagedChannelBuilder.forTarget(target)
                 .usePlaintext()
                 .build();
-        blockingStub = ChordGrpc.newBlockingStub(channel);
+        blockingStub = newBlockingStub(channel);
     }
+
 
     public void shutdown() {
         channel.shutdown();
@@ -134,23 +137,23 @@ public class ChordClient {
     }
 
 
-    public boolean storeMessage(String key, Message message) {
-        StoreMessageRequest request = StoreMessageRequest.newBuilder()
+    /*public boolean storeFile(String key, File file) {
+        StoreFileRequest request = StoreFileRequest.newBuilder()
                 .setKey(key)
-                .setMessage(message)
+                .setFile(file)
                 .build();
         try {
-            StoreMessageResponse response = blockingStub.storeMessage(request);
+            // call upload streaming function
             return response.getSuccess();
         } catch (StatusRuntimeException e) {
             System.err.println("store failed");
             return false;
         }
-    }
+    }*/
 
 
 
-    public Message retrieveMessage(String key) {
+    /*public Message retrieveMessage(String key) {
         RetrieveMessageRequest request = RetrieveMessageRequest.newBuilder()
                 .setKey(key)
                 .build();
@@ -165,5 +168,5 @@ public class ChordClient {
             System.err.println("Message not found");
             return null;
         }
-    }
+    }*/
 }

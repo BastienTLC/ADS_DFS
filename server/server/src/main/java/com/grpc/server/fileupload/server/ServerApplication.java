@@ -7,20 +7,12 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
-import java.net.MalformedURLException;
 import java.net.UnknownHostException;
-import java.util.HashMap;
-import java.util.Map;
 
 import com.grpc.server.fileupload.server.base.ChordNode;
 import com.grpc.server.fileupload.server.base.ChordServiceImpl;
 import com.grpc.server.fileupload.server.base.ScheduledTask;
 
-import de.uniba.wiai.lspi.chord.data.URL;
-import de.uniba.wiai.lspi.chord.service.Chord;
-import de.uniba.wiai.lspi.chord.service.PropertiesLoader;
-import de.uniba.wiai.lspi.chord.service.ServiceException;
-import de.uniba.wiai.lspi.chord.service.impl.ChordImpl;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.client.RestTemplate;
@@ -108,15 +100,15 @@ public class ServerApplication {
 		// Join the network
 		if (joinIp != null && joinPort != -1) {
 			// Join the network existing node
-			// node.join(existingNodeIp, existingNodePort);
-			// System.out.println("Node joined the network via " + existingNodeIp + ":" + existingNodePort);
+			 node.join(joinIp, joinPort);
+			 System.out.println("Node joined the network via " + joinIp + ":" + joinPort);
 		} else {
 			if (!isBootstrapNode) {
 				System.err.println("Bootstrap address must be provided to join an existing Chord network.");
 				System.exit(1);
 			}
 			// First node in the network boorstrap
-			// node.join(null, -1);
+			node.join(null, -1);
 			System.out.println("First node in the network initialized.");
 		}
 
@@ -137,60 +129,6 @@ public class ServerApplication {
 //		registerServer(grpcPort);
 //		return chord;
 
-	}
-
-
-	// Initialize the Chord network (only for the first node)
-	private Chord initializeChordNetwork(String host, int port) {
-		PropertiesLoader.loadPropertyFile(); // Ensure Chord properties are loaded
-
-		String protocol = URL.KNOWN_PROTOCOLS.get(URL.SOCKET_PROTOCOL);
-		URL localURL;
-		try {
-			localURL = new URL(protocol + "://" + host + ":" + port + "/");
-		} catch (MalformedURLException e) {
-			throw new RuntimeException("Invalid URL format for Chord node.", e);
-		}
-
-		Chord chord = new ChordImpl();
-		try {
-			chord.create(localURL);
-			System.out.println("Chord network created successfully at " + localURL);
-		} catch (ServiceException e) {
-			throw new RuntimeException("Could not create Chord network!", e);
-		}
-
-		return chord;
-	}
-
-	// Join an existing Chord network
-	private Chord joinChordNetwork(String host, int port, String bootstrapAddress) {
-		PropertiesLoader.loadPropertyFile();
-		String protocol = URL.KNOWN_PROTOCOLS.get(URL.SOCKET_PROTOCOL);
-
-		URL localURL;
-		try {
-			localURL = new URL(protocol + "://" + host + ":" + port + "/");
-		} catch (MalformedURLException e) {
-			throw new RuntimeException("Invalid URL format for Chord node.", e);
-		}
-
-		URL bootstrapURL;
-		try {
-			bootstrapURL = new URL(protocol + "://" + bootstrapAddress + "/");
-		} catch (MalformedURLException e) {
-			throw new RuntimeException("Invalid URL of bootstrap node", e);
-		}
-
-		Chord chord = new ChordImpl();
-		try {
-			chord.join(localURL, bootstrapURL);
-			System.out.println("Joined Chord network via bootstrap node at: " + bootstrapURL);
-		} catch (ServiceException e) {
-			throw new RuntimeException("Could not join Chord network!", e);
-		}
-
-		return chord;
 	}
 
 	private static void registerServer(int grpcPort) {
