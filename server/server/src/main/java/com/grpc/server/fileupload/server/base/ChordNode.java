@@ -1,11 +1,7 @@
 package com.grpc.server.fileupload.server.base;
 
 
-import com.devProblems.Fileupload;
-import com.grpc.server.fileupload.server.types.FileMetadataModel;
-import com.grpc.server.fileupload.server.types.Message;
 import com.grpc.server.fileupload.server.types.NodeHeader;
-import com.grpc.server.fileupload.server.chordUtils.Wrapper;
 
 import java.math.BigInteger;
 import java.security.MessageDigest;
@@ -23,7 +19,7 @@ public class ChordNode {
     private final FingerTable fingerTable; // Finger table for routing
     private final int m = 64; // Number of bits for the identifier space
     private NodeHeader currentHeader;
-    private MessageStore messageStore;
+    private FileStore fileStore;
     private final boolean multiThreadingEnabled;
     private final ExecutorService executorService;
 
@@ -39,7 +35,7 @@ public class ChordNode {
         this.nodeId = hashNode(ip + ":" + port);
         this.fingerTable = new FingerTable(this, m);
         this.currentHeader = new NodeHeader(ip, port, nodeId);
-        this.messageStore = new MessageStore();
+        this.fileStore = new FileStore();
     }
 
     // Function to hash the node ID based on IP and port
@@ -64,7 +60,7 @@ public class ChordNode {
     public NodeHeader getPredecessor() { return this.predecessor; }
     public void setPredecessor(NodeHeader predecessor) { this.predecessor = predecessor; }
     public FingerTable getFingerTable() { return this.fingerTable; }
-    public MessageStore getMessageStore() { return this.messageStore; }
+    public FileStore getMessageStore() { return this.fileStore; }
 
     // Method to join the network
     public void join(String existingNodeIp, int existingNodePort) {
@@ -281,18 +277,18 @@ public class ChordNode {
         }
     }
 
-    public void storeFileInChord(String key, FileMetadataModel fileMetadata) {
+    public void storeFileInChord(String key, byte[] fileContent) {
         Runnable task = () -> {
-            // Hash the key
+            // Hash the key to find the node responsible for storing the file
             String keyId = hashNode(key);
 
-            // Find the responsible node
+            // Find the successor node responsible for the key
             NodeHeader responsibleNode = findSuccessor(keyId);
 
             ChordClient responsibleNodeClient = new ChordClient(responsibleNode.getIp(), Integer.parseInt(responsibleNode.getPort()));
 
-            // Store the message on the responsible node
-            responsibleNodeClient.storeMessage(key, Wrapper.wrapMessageToGrpcMessage(message));
+            // Store the file on the responsible node
+            responsibleNodeClient.storeFile(key, fileContent);
 
             responsibleNodeClient.shutdown();
         };
@@ -300,7 +296,7 @@ public class ChordNode {
         executeGrpcCall(task);
     }
 
-    public Message retrieveMessageFromChord(String key) {
+    /*public Message retrieveMessageFromChord(String key) {
         //async not implemented for retrieve
         String keyId = hashNode(key);
 
@@ -312,7 +308,7 @@ public class ChordNode {
 
         responsibleNodeClient.shutdown();
         return message;
-    }
+    }*/
 
     // Interval checking methods
     private boolean isInIntervalOpenOpen(String id, String start, String end) {

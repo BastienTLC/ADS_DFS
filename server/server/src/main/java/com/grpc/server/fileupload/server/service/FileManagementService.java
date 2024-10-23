@@ -1,10 +1,7 @@
 // FileManagementHandler.java
 package com.grpc.server.fileupload.server.service;
 
-import com.devProblems.FileDownloadRequest;
-import com.devProblems.FileMetadata;
-import com.devProblems.HealthCheckResponse;
-import com.devProblems.ListFilesResponse;
+import com.devProblems.Fileupload.*;
 import com.google.protobuf.Empty;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;

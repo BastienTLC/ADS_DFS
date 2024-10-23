@@ -1,13 +1,12 @@
 package com.grpc.server.fileupload.server.interceptor;
 
-import com.devProblems.FileMetadata;
+import com.devProblems.Fileupload.FileMetadata;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.shared.proto.Constants;
 import io.grpc.*;
-import net.devh.boot.grpc.server.interceptor.GrpcGlobalServerInterceptor;
 
-@GrpcGlobalServerInterceptor
 public class FileUploadInterceptor implements ServerInterceptor {
+
     @Override
     public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
             ServerCall<ReqT, RespT> serverCall,
@@ -25,7 +24,7 @@ public class FileUploadInterceptor implements ServerInterceptor {
                 serverCall.close(status, metadata);
                 return new ServerCall.Listener<ReqT>() {};
             }
-            // intializing the context that will help us get the value of filemetadata in the service
+            // initializing the context that will help us get the value of filemetadata in the service
             Context context = Context.current().withValue(
                     Constants.fileMetaContext,
                     fileMetadata
@@ -37,5 +36,5 @@ public class FileUploadInterceptor implements ServerInterceptor {
             return serverCallHandler.startCall(serverCall, metadata);
         }
     }
-}
 
+}

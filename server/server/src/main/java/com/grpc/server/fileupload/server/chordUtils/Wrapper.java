@@ -1,10 +1,9 @@
 package com.grpc.server.fileupload.server.chordUtils;
 
-import com.example.grpc.chord.ChordProto; // not working currently
 
 import com.grpc.server.fileupload.server.types.Message;
 
-public class Wrapper {
+/*public class Wrapper {
     public static Message wrapGrpcMessageToMessage(ChordProto.Message grpcMessage) {
         return new com.grpc.server.fileupload.server.types.Message(
                 grpcMessage.getId(),
@@ -26,4 +25,4 @@ public class Wrapper {
                 .setData(com.google.protobuf.ByteString.copyFrom(message.getData()))
                 .build();
     }
-}
+}*/

@@ -178,9 +178,11 @@ service Chord {
   rpc closestPrecedingFinger (ClosestRequest) returns (NodeInfo);
   rpc updateFingerTable(UpdateFingerTableRequest) returns (google.protobuf.Empty);
   rpc getNodeInfo (GetNodeInfoRequest) returns (GetNodeInfoResponse);
+  rpc storeFile(stream FileUploadRequest) returns (FileUploadResponse);
+  rpc retrieveFile(FileDownloadRequest) returns (stream FileDownloadResponse);
 
   // Stream-based File management in Chord
-  rpc storeFile (stream FileUploadRequest) returns (StoreFileResponse);
-  rpc retrieveFile (RetrieveFileRequest) returns (stream FileDownloadResponse);
+  rpc storeFileInChord (stream FileUploadRequest) returns (FileUploadResponse);
+  rpc retrieveFileFromChord (FileDownloadRequest) returns (stream FileDownloadResponse);
   rpc getChordNodeInfo (google.protobuf.Empty) returns (Node);
 }

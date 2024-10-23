@@ -1,8 +1,5 @@
 package com.grpc.server.fileupload.server.utils;
 
-import de.uniba.wiai.lspi.chord.data.ID;
-import de.uniba.wiai.lspi.chord.service.Chord;
-import de.uniba.wiai.lspi.chord.service.Key;
 
 import java.io.ByteArrayOutputStream;
 import java.io.FileOutputStream;

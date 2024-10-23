@@ -1,8 +1,7 @@
 
 package com.grpc.server.fileupload.server.service;
 
-import com.devProblems.FileDownloadRequest;
-import com.devProblems.FileTesting;
+import com.devProblems.Fileupload.*;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

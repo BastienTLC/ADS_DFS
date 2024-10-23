@@ -4,25 +4,19 @@ import com.devProblems.Fileupload.*;
 import com.devProblems.ChordGrpc.*;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Empty;
-import com.grpc.server.fileupload.server.chordUtils.ChordHash;
-import com.grpc.server.fileupload.server.impl.FileUploadServiceImpl;
-import com.grpc.server.fileupload.server.service.FileUploadService;
 import com.grpc.server.fileupload.server.types.FileMetadataModel;
 import com.grpc.server.fileupload.server.utils.DiskFileStorage;
 import com.shared.proto.Constants;
-import io.grpc.stub.StreamObserver;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.Arrays;
 
 import com.grpc.server.fileupload.server.types.NodeHeader;
-import com.grpc.server.fileupload.server.chordUtils.Wrapper;
+import io.grpc.stub.StreamObserver;
 
 
 public class ChordServiceImpl extends ChordImplBase {
     private final ChordNode chordNode;
-    private FileUploadServiceImpl fileUploadService;
 
     public ChordServiceImpl(ChordNode chordNode) {
         this.chordNode = chordNode;
@@ -160,47 +154,11 @@ public class ChordServiceImpl extends ChordImplBase {
 
 
     @Override
-    public void storeMessage(StoreMessageRequest request, StreamObserver<StoreMessageResponse> responseObserver) {
-        String key = request.getKey();
-        Message messageRpc = request.getMessage();
-        com.grpc.server.fileupload.server.types.Message message = Wrapper.wrapGrpcMessageToMessage(messageRpc);
-
-        // stpre
-        chordNode.getMessageStore().storeMessage(key, message);
-
-        StoreMessageResponse response = StoreMessageResponse.newBuilder()
-                .setSuccess(true)
-                .build();
-        responseObserver.onNext(response);
-        responseObserver.onCompleted();
-    }
-
-    @Override
-    public void retrieveMessage(RetrieveMessageRequest request, StreamObserver<RetrieveMessageResponse> responseObserver) {
-        String key = request.getKey();
-
-        com.grpc.server.fileupload.server.types.Message message = chordNode.getMessageStore().retrieveMessage(key);
-
-        Message messageRpc = message != null ? Wrapper.wrapMessageToGrpcMessage(message) : null;
-
-        RetrieveMessageResponse.Builder responseBuilder = RetrieveMessageResponse.newBuilder();
-
-        if (message != null) {
-            responseBuilder.setFound(true)
-                    .setMessage(messageRpc);
-        } else {
-            responseBuilder.setFound(false);
-        }
-
-        responseObserver.onNext(responseBuilder.build());
-        responseObserver.onCompleted();
-    }
-    @Override
     public StreamObserver<FileUploadRequest> storeFile(StreamObserver<FileUploadResponse> responseObserver) {
-        FileMetadata fileMetadata = Constants.fileMetaContext.get(); // this is used at the end of the function to verify meta data
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        return new StreamObserver<>() {
+        FileMetadata fileMetadata = Constants.fileMetaContext.get();
+        DiskFileStorage diskFileStorage = new DiskFileStorage();
 
+        return new StreamObserver<>() {
             @Override
             // this method will write the bytes to the byte array stream that we have created in the diskFileStorage
             public void onNext(FileUploadRequest fileUploadRequest) {
@@ -208,7 +166,7 @@ public class ChordServiceImpl extends ChordImplBase {
                 System.out.println(String.format("received %d length of data", fileUploadRequest.getFile().getContent().size()));
                 try {
                     fileUploadRequest.getFile().getContent()
-                            .writeTo(byteArrayOutputStream);
+                            .writeTo(diskFileStorage.getStream());
                 } catch (IOException e) {
                     // this is invoking the clients on error method
                     responseObserver.onError(io.grpc.Status.INTERNAL
@@ -228,18 +186,14 @@ public class ChordServiceImpl extends ChordImplBase {
             public void onCompleted() {
 
                 try {
-                    int totalBytesReceived = byteArrayOutputStream.size();
+                    int totalBytesReceived = diskFileStorage.getStream().size();
                     // the reason why we create the fileMetadata object was to validate here that
                     // it is the same that the server has received
                     if (totalBytesReceived == fileMetadata.getContentLength()) {
                         // if matches we write to the diskFileStorage
-                        //Fichier
-                        FileMetadataModel file = new FileMetadataModel(fileMetadata.getFileNameWithType(), byteArrayOutputStream.size());
-
-                        //Name
-                        String name = fileMetadata.getFileNameWithType();
-                        byteArrayOutputStream.close();
-                        chordNode.storeFileInChord(name, file);
+                        diskFileStorage.write(fileMetadata.getFileNameWithType());
+                        //chordNode.getMessageStore().addFileMetadata(fileMetadata.getFileNameWithType(), fileMetadata);
+                        diskFileStorage.close();
                     } else {
                         // notifying the client with error
                         responseObserver.onError(
@@ -272,6 +226,92 @@ public class ChordServiceImpl extends ChordImplBase {
     }
 
     /*@Override
+    public void retrieveMessage(RetrieveMessageRequest request, StreamObserver<RetrieveMessageResponse> responseObserver) {
+        String key = request.getKey();
+
+        com.grpc.server.fileupload.server.types.Message message = chordNode.getMessageStore().retrieveMessage(key);
+
+        Message messageRpc = message != null ? Wrapper.wrapMessageToGrpcMessage(message) : null;
+
+        RetrieveMessageResponse.Builder responseBuilder = RetrieveMessageResponse.newBuilder();
+
+        if (message != null) {
+            responseBuilder.setFound(true)
+                    .setMessage(messageRpc);
+        } else {
+            responseBuilder.setFound(false);
+        }
+
+        responseObserver.onNext(responseBuilder.build());
+        responseObserver.onCompleted();
+    }*/
+    @Override
+    public StreamObserver<FileUploadRequest> storeFileInChord(StreamObserver<FileUploadResponse> responseObserver) {
+        FileMetadata fileMetadata = Constants.fileMetaContext.get(); // this is used at the end of the function to verify meta data
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        return new StreamObserver<>() {
+
+            @Override
+            // this method will write the bytes to the byte array stream that we have created in the diskFileStorage
+            public void onNext(FileUploadRequest fileUploadRequest) {
+                // called so we can compare that received data matches the data sent
+                System.out.println(String.format("received %d length of data", fileUploadRequest.getFile().getContent().size()));
+                try {
+                    fileUploadRequest.getFile().getContent()
+                            .writeTo(byteArrayOutputStream);
+                } catch (IOException e) {
+                    // this is invoking the clients on error method
+                    responseObserver.onError(io.grpc.Status.INTERNAL
+                            .withDescription("cannot write data due to : " + e.getMessage())
+                            .asRuntimeException());
+                }
+            }
+
+            @Override
+            // called when client sends error
+            public void onError(Throwable throwable) {
+                System.out.println("Error occurred while uploading file: " + throwable.toString());
+            }
+
+            @Override
+            // called when client has finished sending data
+            public void onCompleted() {
+
+                try {
+                    int totalBytesReceived = byteArrayOutputStream.size();
+                    if (totalBytesReceived == fileMetadata.getContentLength()) {
+                        String name = fileMetadata.getFileNameWithType();
+                        byteArrayOutputStream.close();
+                        byte[] fileContent = byteArrayOutputStream.toByteArray();
+                        chordNode.storeFileInChord(name, fileContent);
+                    } else {
+                        responseObserver.onError(
+                                io.grpc.Status.FAILED_PRECONDITION
+                                        .withDescription(String.format("Expected %d bytes but received %d bytes", fileMetadata.getContentLength(), totalBytesReceived))
+                                        .asRuntimeException()
+                        );
+                        return;
+                    }
+                } catch (IOException e) {
+                    responseObserver.onError(io.grpc.Status.INTERNAL
+                            .withDescription("Cannot save data due to: " + e.getMessage())
+                            .asRuntimeException());
+                    return;
+                }
+
+                responseObserver.onNext(
+                        FileUploadResponse
+                                .newBuilder()
+                                .setFileName(fileMetadata.getFileNameWithType())
+                                .setUploadStatus(UploadStatus.SUCCESS)
+                                .build()
+                );
+                responseObserver.onCompleted();
+            }
+        };
+    }
+
+    /*@Override
     public void storeMessageInChord(StoreFileRequest request, StreamObserver<StoreFileResponse> responseObserver) {
         String key = request.getKey();
         Message messageRpc = request.getMessage();
@@ -286,7 +326,7 @@ public class ChordServiceImpl extends ChordImplBase {
         responseObserver.onCompleted();
     }*/
 
-    @Override
+    /*@Override
     public void retrieveMessageFromChord(RetrieveMessageRequest request, StreamObserver<RetrieveMessageResponse> responseObserver) {
         String key = request.getKey();
 
@@ -313,14 +353,14 @@ public class ChordServiceImpl extends ChordImplBase {
         responseObserver.onNext(LeaveResponse.newBuilder().setSuccess(true).build());
         responseObserver.onCompleted();
         System.exit(0);
-    }
+    }*/
 
 
 
 
-    @Override
+    /*@Override
     public void getChordNodeInfo(com.google.protobuf.Empty request, StreamObserver<Node> responseObserver) {
-        ChordProto.MessageStore messageStore = ChordProto.MessageStore.newBuilder()
+        MessageStore messageStore = MessageStore.newBuilder()
                 .addAllMessages(chordNode.getMessageStore().getStorage().values().stream().map(message -> Message.newBuilder()
                         .setId(message.getId())
                         .setTimestamp(message.getTimestamp())
@@ -355,5 +395,5 @@ public class ChordServiceImpl extends ChordImplBase {
                 .build();
         responseObserver.onNext(node);
         responseObserver.onCompleted();
-    }
+    }*/
 }
