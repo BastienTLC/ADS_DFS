@@ -1,15 +1,19 @@
 package com.grpc.server.fileupload.server.base;
 
+import com.devProblems.ChordGrpc;
 import com.devProblems.ChordGrpc.*;
 import com.devProblems.FileUploadServiceGrpc;
 import com.devProblems.Fileupload.*;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Empty;
 import com.grpc.server.fileupload.server.types.FileMetadataModel;
+import com.shared.proto.Constants;
 import io.grpc.*;
 import com.grpc.server.fileupload.server.types.NodeHeader;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
+
+import java.util.concurrent.CountDownLatch;
 
 import static com.devProblems.ChordGrpc.newBlockingStub;
 
@@ -140,20 +144,28 @@ public class ChordClient {
     }
 
     public void storeFile(String key, byte[] fileContent) {
-
         // Create the stub for FileUploadService
-        FileUploadServiceGrpc.FileUploadServiceStub stub = FileUploadServiceGrpc.newStub(channel);
+        ChordGrpc.ChordStub stub = ChordGrpc.newStub(channel);
 
-        // Prepare metadata with the file name and content length
+        FileMetadata fileMetadata = Constants.fileMetaContext.get();
+
+        System.out.println("File metadata: " + fileMetadata.getFileNameWithType());
+
         Metadata metadata = new Metadata();
-        metadata.put(Metadata.Key.of("fileName", Metadata.ASCII_STRING_MARSHALLER), key);
-        metadata.put(Metadata.Key.of("contentLength", Metadata.ASCII_STRING_MARSHALLER), String.valueOf(fileContent.length));
+        metadata.put(Constants.fileMetadataKey,
+                FileMetadata.newBuilder()
+                        .setFileNameWithType(fileMetadata.getFileNameWithType())
+                        .setContentLength(fileMetadata.getContentLength())
+                        .build()
+                        .toByteArray());
+
 
         // Attach metadata using a custom interceptor
         ClientInterceptor headerInterceptor = MetadataUtils.newAttachHeadersInterceptor(metadata);
         stub = stub.withInterceptors(headerInterceptor);
 
         // Create a response observer
+        CountDownLatch finishLatch = new CountDownLatch(1);  // For synchronization
         StreamObserver<FileUploadResponse> responseObserver = new StreamObserver<>() {
             @Override
             public void onNext(FileUploadResponse value) {
@@ -163,30 +175,41 @@ public class ChordClient {
             @Override
             public void onError(Throwable t) {
                 t.printStackTrace();
+                finishLatch.countDown();  // Signal that the process failed
             }
 
             @Override
             public void onCompleted() {
                 System.out.println("File upload completed.");
+                finishLatch.countDown();  // Signal that the process is done
             }
         };
 
-        // Create a request observer
-        StreamObserver<FileUploadRequest> requestObserver = stub.uploadFile(responseObserver);
+        // Start streaming the file content
+        StreamObserver<FileUploadRequest> requestObserver = stub.storeFile(responseObserver);
 
         // Stream the file content in chunks
-        int chunkSize = 5120; // 5KB
+        int chunkSize = 5120;  // 5KB
         int offset = 0;
-        while (offset < fileContent.length) {
-            int length = Math.min(chunkSize, fileContent.length - offset);
-            ByteString content = ByteString.copyFrom(fileContent, offset, length);
-            FileUploadRequest request = FileUploadRequest.newBuilder()
-                    .setFile(File.newBuilder().setContent(content))
-                    .build();
-            requestObserver.onNext(request);
-            offset += length;
+        try {
+            while (offset < fileContent.length) {
+                int length = Math.min(chunkSize, fileContent.length - offset);
+                ByteString content = ByteString.copyFrom(fileContent, offset, length);
+                FileUploadRequest request = FileUploadRequest.newBuilder()
+                        .setFile(File.newBuilder().setContent(content))
+                        .build();
+                requestObserver.onNext(request);
+                offset += length;
+            }
+            // Mark the end of the stream
+            requestObserver.onCompleted();
+
+            // Wait until the file upload is complete or an error occurs
+            finishLatch.await();
+        } catch (Exception e) {
+            e.printStackTrace();
+            requestObserver.onError(e);  // Notify the server of the error
         }
-        requestObserver.onCompleted();
     }
 
     /*public boolean storeFile(String key, File file) {

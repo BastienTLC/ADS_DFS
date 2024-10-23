@@ -1,7 +1,7 @@
 // FileUploadService.java
 package com.grpc.client.fileupload.client.service;
 
-import com.devProblems.*;
+import com.devProblems.Fileupload.*;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Empty;
 import com.grpc.client.fileupload.client.utils.NodeInfo;
@@ -45,10 +45,12 @@ public class FileUploadService extends BaseFileService {
 
         Metadata metadata = createMetadata(fileName, fileSize);
 
+        super.createChannel("localhost", "8000");
+
         // using fileUploadRequestStreamObserver we will stream the file content to the server
         StreamObserver<FileUploadRequest> fileUploadRequestStreamObserver = this.client
                 .withInterceptors(MetadataUtils.newAttachHeadersInterceptor(metadata))
-                .uploadFile(
+                .storeFileInChord(
                         new StreamObserver<>() {
                             @Override
                             public void onNext(FileUploadResponse fileUploadResponse) {

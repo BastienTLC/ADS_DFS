@@ -1,7 +1,7 @@
 // FileManagementController.java
 package com.grpc.client.fileupload.client.controller;
 
-import com.devProblems.FileDownloadRequest;
+import com.devProblems.Fileupload.FileDownloadRequest;
 import com.grpc.client.fileupload.client.model.FileMetadataModel;
 import com.grpc.client.fileupload.client.service.FileOperationService;
 import lombok.extern.slf4j.Slf4j;

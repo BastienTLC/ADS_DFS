@@ -1,6 +1,6 @@
 package com.grpc.client.fileupload.client.model;
 
-import com.devProblems.FileMetadata;
+import com.devProblems.Fileupload.FileMetadata;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class FileMetadataModel {

@@ -1,7 +1,7 @@
 package com.grpc.client.fileupload.client.service;
 
-import com.devProblems.FileDownloadRequest;
-import com.devProblems.FileTesting;
+import com.devProblems.Fileupload.FileDownloadRequest;
+import com.devProblems.Fileupload.FileTesting;
 import io.grpc.Metadata;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
@@ -29,7 +29,7 @@ public class FileTestService extends BaseFileService {
                 .setFileName(fileName)
                 .build();
 
-        client.withInterceptors(MetadataUtils.newAttachHeadersInterceptor(metadata))
+        /*client.withInterceptors(MetadataUtils.newAttachHeadersInterceptor(metadata))
                 .testMethod(request, new StreamObserver<FileTesting>() {
                     @Override
                     public void onNext(FileTesting fileTesting) {
@@ -54,7 +54,7 @@ public class FileTestService extends BaseFileService {
         } catch (InterruptedException e) {
             e.printStackTrace();
             return "Failed to get the response from the server.";
-        }
+        }*/
 
         return response.toString();
     }

@@ -1,19 +1,19 @@
 syntax = "proto3";
 
-option java_multiple_files = true;
-
 package com.devProblems;
+
 import "google/protobuf/empty.proto";
 
+// Message Definitions
 message File {
   bytes content = 1;
+  string fileName = 2;
 }
 
 message FileUploadRequest {
   File file = 1;
 }
 
-// new
 message FileDownloadRequest {
   string fileName = 1;
 }
@@ -28,12 +28,10 @@ message FileUploadResponse {
   UploadStatus uploadStatus = 2;
 }
 
-// new
 message FileDownloadResponse {
   File file = 1;
 }
 
-// new
 message FileTesting {
   string text = 1;
 }
@@ -57,15 +55,134 @@ enum FileOperations {
   CLOSE = 2;
 }
 
-service FileUploadService {
+message NodeInfo {
+  string id = 1;
+  string ip = 2;
+  int32 port = 3;
+}
 
+message NodesInfo {
+  repeated NodeInfo nodeList = 1;
+}
+
+message JoinRequest {
+  NodeInfo new_node = 1;
+}
+
+message JoinResponse {
+  bool success = 1;
+  NodeInfo successor = 2;
+}
+
+message StabilizeRequest {
+  NodeInfo caller = 1;
+}
+
+message StabilizeResponse {
+  bool success = 1;
+}
+
+message NotifyRequest {
+  NodeInfo caller = 1;
+}
+
+message NotifyResponse {
+  bool success = 1;
+}
+
+message LeaveResponse {
+  bool success = 1;
+}
+
+message PingRequest {
+  NodeInfo node = 1;
+}
+
+message PingResponse {
+  bool alive = 1;
+}
+
+message UpdateFingerTableRequest {
+  NodeInfo s = 1;
+  int32 i = 2;
+}
+
+message GetNodeInfoRequest {}
+
+message GetNodeInfoResponse {
+  NodeInfo node = 1;
+}
+
+message ClosestRequest {
+  string id = 1;
+}
+
+
+message StoreFileResponse {
+  string fileName = 1;
+  bool success = 2;
+}
+
+message RetrieveFileRequest {
+  string fileName = 1;
+}
+
+message Node {
+  string ip = 1;
+  int32 port = 2;
+  string id = 3;
+  NodeInfo predecessor = 4;
+  NodeInfo successor = 5;
+  FingerTable fingerTable = 6;
+  int32 m = 7;
+  FileStore fileStore = 8;
+}
+
+message FingerTable {
+  repeated NodeInfo finger = 1;
+}
+
+message FileStore {
+  repeated File files = 1;
+}
+
+// Service Definitions
+service FileUploadService {
   rpc uploadFile (stream FileUploadRequest) returns (FileUploadResponse) {}
-  rpc downloadFile (FileDownloadRequest) returns (stream FileDownloadResponse) {} // new
-  rpc testMethod (FileDownloadRequest) returns (FileTesting) {} // new
+  rpc downloadFile (FileDownloadRequest) returns (stream FileDownloadResponse) {}
+  rpc testMethod (FileDownloadRequest) returns (FileTesting) {}
 }
 
 service FileOperationsService {
   rpc listFiles (google.protobuf.Empty) returns (ListFilesResponse) {}
   rpc getFileMetadata (FileDownloadRequest) returns (FileMetadata) {}
   rpc healthCheck (google.protobuf.Empty) returns (HealthCheckResponse) {}
+}
+
+service NodeOperationsService {
+  rpc joinRequest (NodeInfo) returns (NodesInfo) {}
+  rpc leaveRequest (NodesInfo) returns (google.protobuf.Empty) {}
+}
+
+service Chord {
+  rpc join (JoinRequest) returns (JoinResponse);
+  rpc findSuccessor (NodeInfo) returns (NodeInfo);
+  rpc stabilize (StabilizeRequest) returns (StabilizeResponse);
+  rpc notify (NotifyRequest) returns (NotifyResponse);
+  rpc leave (google.protobuf.Empty) returns (LeaveResponse);
+  rpc ping (PingRequest) returns (PingResponse);
+  rpc getPredecessor (google.protobuf.Empty) returns (NodeInfo);
+  rpc getSuccessor (google.protobuf.Empty) returns (NodeInfo);
+  rpc setPredecessor (NodeInfo) returns (google.protobuf.Empty);
+  rpc setSuccessor (NodeInfo) returns (google.protobuf.Empty);
+  rpc closestPrecedingFinger (ClosestRequest) returns (NodeInfo);
+  rpc updateFingerTable(UpdateFingerTableRequest) returns (google.protobuf.Empty);
+  rpc getNodeInfo (GetNodeInfoRequest) returns (GetNodeInfoResponse);
+  rpc storeFile(stream FileUploadRequest) returns (FileUploadResponse);
+  rpc retrieveFile(FileDownloadRequest) returns (stream FileDownloadResponse);
+
+  // Stream-based File management in Chord
+  rpc storeFileInChord (stream FileUploadRequest) returns (FileUploadResponse);
+  rpc retrieveFileFromChord (FileDownloadRequest) returns (stream FileDownloadResponse);
+  rpc getChordNodeInfo (google.protobuf.Empty) returns (Node);
 }

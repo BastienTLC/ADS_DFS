@@ -2,8 +2,8 @@
 package com.grpc.client.fileupload.client.service;
 
 
-import com.devProblems.FileDownloadRequest;
-import com.devProblems.FileDownloadResponse;
+import com.devProblems.Fileupload.FileDownloadRequest;
+import com.devProblems.Fileupload.FileDownloadResponse;
 import com.grpc.client.fileupload.client.utils.DiskFileStorage;
 import com.grpc.client.fileupload.client.utils.NodeInfo;
 import io.grpc.Metadata;
@@ -36,7 +36,7 @@ public class FileDownloadService extends BaseFileService {
         super.createRandomChannelFromBootstrap();
 
         client.withInterceptors(MetadataUtils.newAttachHeadersInterceptor(metadata))
-                .downloadFile(request, new StreamObserver<FileDownloadResponse>() {
+                .retrieveFileFromChord(request, new StreamObserver<FileDownloadResponse>() {
                     @Override
                     public void onNext(FileDownloadResponse fileDownloadResponse) {
                         log.info(String.format("received %d length of data", fileDownloadResponse.getFile().getContent().size()));

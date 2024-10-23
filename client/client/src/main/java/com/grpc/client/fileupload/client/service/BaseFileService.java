@@ -1,11 +1,11 @@
 package com.grpc.client.fileupload.client.service;
 
-import com.devProblems.FileOperations;
+import com.devProblems.ChordGrpc;
+import com.devProblems.Fileupload.FileMetadata;
 import com.devProblems.FileOperationsServiceGrpc;
 import com.grpc.client.fileupload.client.Factory.GrpcChannelFactory;
 import com.shared.proto.Constants;
 import com.devProblems.FileUploadServiceGrpc;
-import com.devProblems.FileMetadata;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Metadata;
@@ -27,7 +27,7 @@ public abstract class BaseFileService {
     private BootstrapService bootstrapService;
 
     // This is the client stub for the FileUploadService used to upload and download files
-    protected FileUploadServiceGrpc.FileUploadServiceStub client;
+    protected ChordGrpc.ChordStub client;
     // This is the blocking client stub for the FileOperationsService used to list files and get file metadata
     protected FileOperationsServiceGrpc.FileOperationsServiceBlockingStub blockingClient;
 
@@ -39,7 +39,7 @@ public abstract class BaseFileService {
     // same but for the client
     protected void setClient(NodeInfo nodeInfo) {
         ManagedChannel channel = grpcChannelFactory.getChannel(nodeInfo.getIp(), Integer.parseInt(nodeInfo.getPort()));
-        client = FileUploadServiceGrpc.newStub(channel);
+        client = ChordGrpc.newStub(channel);
     }
 
     // Set the client and blocking client channel to a random server
@@ -67,7 +67,7 @@ public abstract class BaseFileService {
     // Set the client and blocking client channel to a server with the given IP and port
     protected void createChannel(String ip, String port) {
         ManagedChannel channel = grpcChannelFactory.getChannel(ip, Integer.parseInt(port));
-        client = FileUploadServiceGrpc.newStub(channel);
+        client = ChordGrpc.newStub(channel);
         blockingClient = FileOperationsServiceGrpc.newBlockingStub(channel);
     }
 
