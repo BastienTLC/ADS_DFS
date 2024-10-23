@@ -143,8 +143,40 @@ public class ChordClient {
 
     }
 
+    public void retrieveFile(String key) {
+        System.out.println("retrieveFile called");
+
+        ChordGrpc.ChordStub stub = ChordGrpc.newStub(channel);
+
+        FileDownloadRequest request = FileDownloadRequest.newBuilder()
+                .setFileName(key)
+                .build();
+        StreamObserver<FileDownloadResponse> responseObserver = new StreamObserver<>() {
+            @Override
+            public void onNext(FileDownloadResponse value) {
+                System.out.println("Received file chunk...");
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                System.err.println("Failed to retrieve file: " + t.getMessage());
+                t.printStackTrace();
+            }
+
+            @Override
+            public void onCompleted() {
+                System.out.println("File retrieval completed.");
+            }
+        };
+
+        stub.retrieveFile(request, responseObserver);
+
+    }
+
+
     public void storeFile(String key, byte[] fileContent) {
         // Create the stub for FileUploadService
+        System.out.println("storeFile called");
         ChordGrpc.ChordStub stub = ChordGrpc.newStub(channel);
 
         FileMetadata fileMetadata = Constants.fileMetaContext.get();

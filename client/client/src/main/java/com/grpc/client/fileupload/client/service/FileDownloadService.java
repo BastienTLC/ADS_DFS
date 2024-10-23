@@ -33,7 +33,11 @@ public class FileDownloadService extends BaseFileService {
         DiskFileStorage diskFileStorage = new DiskFileStorage();
 
         //setting up the channel
-        super.createRandomChannelFromBootstrap();
+        // super.createRandomChannelFromBootstrap();
+
+        // later this will be changed where the user can specify the IP:port of any node in the network,
+        // alternative a bootstrap service can be used to get random ip:port
+        super.createChannel("localhost", "8000");
 
         client.withInterceptors(MetadataUtils.newAttachHeadersInterceptor(metadata))
                 .retrieveFileFromChord(request, new StreamObserver<FileDownloadResponse>() {

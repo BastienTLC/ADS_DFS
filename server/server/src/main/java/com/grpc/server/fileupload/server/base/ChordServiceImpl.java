@@ -9,9 +9,12 @@ import com.grpc.server.fileupload.server.utils.DiskFileStorage;
 import com.shared.proto.Constants;
 
 import java.io.ByteArrayOutputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 
 import com.grpc.server.fileupload.server.types.NodeHeader;
+import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 
 
@@ -151,6 +154,51 @@ public class ChordServiceImpl extends ChordImplBase {
     }
 
 
+    // this function will transfer file to bootstrap node so that the bootstrap node can send it back
+    // to the client
+    @Override
+    public void retrieveFile(FileDownloadRequest request, StreamObserver<FileDownloadResponse> responseObserver) {
+        String filename = request.getFileName();
+        String filePath = "output/" + filename;
+        java.io.File file = new java.io.File(filePath);
+
+        if (!file.exists() || !file.isFile()) {
+            System.out.println(String.format("File not found: " + filename));
+            responseObserver.onError(Status.NOT_FOUND.withDescription("File not found").asRuntimeException());
+            return;
+        }
+
+        byte[] fiveKB = new byte[5120];
+        int length;
+
+        try (InputStream inputStream = new FileInputStream(file)) {
+            // Reading bytes and sending them to the client
+            while ((length = inputStream.read(fiveKB)) > 0) {
+                System.out.println(String.format("Sending %d length of data", length));
+                File fileMessage = File.newBuilder()
+                        .setContent(ByteString.copyFrom(fiveKB, 0, length))
+                        .build();
+
+                FileDownloadResponse response = FileDownloadResponse.newBuilder()
+                        .setFile(fileMessage)  // Use the File message containing the content
+                        .build();
+
+                responseObserver.onNext(response);
+            }
+
+            // Response is completed once all data is sent
+            responseObserver.onCompleted();
+
+        } catch (IOException e) {
+            System.out.println(String.format("Error reading file: " + filename, e));
+            responseObserver.onError(Status.INTERNAL.withDescription("Error reading file").asRuntimeException());
+        }
+
+
+
+    }
+
+
 
 
     @Override
@@ -225,26 +273,27 @@ public class ChordServiceImpl extends ChordImplBase {
         };
     }
 
-    /*@Override
-    public void retrieveMessage(RetrieveMessageRequest request, StreamObserver<RetrieveMessageResponse> responseObserver) {
-        String key = request.getKey();
+//    @Override
+//    public void retrieveMessage(RetrieveMessageRequest request, StreamObserver<RetrieveMessageResponse> responseObserver) {
+//        String key = request.getKey();
+//
+//        com.grpc.server.fileupload.server.types.Message message = chordNode.getMessageStore().retrieveMessage(key);
+//
+//        Message messageRpc = message != null ? Wrapper.wrapMessageToGrpcMessage(message) : null;
+//
+//        RetrieveMessageResponse.Builder responseBuilder = RetrieveMessageResponse.newBuilder();
+//
+//        if (message != null) {
+//            responseBuilder.setFound(true)
+//                    .setMessage(messageRpc);
+//        } else {
+//            responseBuilder.setFound(false);
+//        }
+//
+//        responseObserver.onNext(responseBuilder.build());
+//        responseObserver.onCompleted();
+//    }
 
-        com.grpc.server.fileupload.server.types.Message message = chordNode.getMessageStore().retrieveMessage(key);
-
-        Message messageRpc = message != null ? Wrapper.wrapMessageToGrpcMessage(message) : null;
-
-        RetrieveMessageResponse.Builder responseBuilder = RetrieveMessageResponse.newBuilder();
-
-        if (message != null) {
-            responseBuilder.setFound(true)
-                    .setMessage(messageRpc);
-        } else {
-            responseBuilder.setFound(false);
-        }
-
-        responseObserver.onNext(responseBuilder.build());
-        responseObserver.onCompleted();
-    }*/
     @Override
     public StreamObserver<FileUploadRequest> storeFileInChord(StreamObserver<FileUploadResponse> responseObserver) {
         FileMetadata fileMetadata = Constants.fileMetaContext.get(); // this is used at the end of the function to verify meta data
@@ -309,6 +358,59 @@ public class ChordServiceImpl extends ChordImplBase {
                 responseObserver.onCompleted();
             }
         };
+    }
+
+
+
+    @Override
+    public void retrieveFileFromChord(FileDownloadRequest request, StreamObserver<FileDownloadResponse> responseObserver) {
+        String filename = request.getFileName();
+        System.out.println(String.format("Received download request for filename: " + filename));
+
+
+        // Logic for retrieving file remains the same if this node is responsible for storing it
+        if (chordNode.isResponsibleForKey(filename)) {
+            String filePath = "output/" + filename;
+            java.io.File file = new java.io.File(filePath);
+
+            if (!file.exists() || !file.isFile()) {
+                System.out.println(String.format("File not found: " + filename));
+                responseObserver.onError(Status.NOT_FOUND.withDescription("File not found").asRuntimeException());
+                return;
+            }
+
+            byte[] fiveKB = new byte[5120];
+            int length;
+
+            try (InputStream inputStream = new FileInputStream(file)) {
+                // Reading bytes and sending them to the client
+                while ((length = inputStream.read(fiveKB)) > 0) {
+                    System.out.println(String.format("Sending %d length of data", length));
+                    File fileMessage = File.newBuilder()
+                            .setContent(ByteString.copyFrom(fiveKB, 0, length))
+                            .build();
+
+                    FileDownloadResponse response = FileDownloadResponse.newBuilder()
+                            .setFile(fileMessage)  // Use the File message containing the content
+                            .build();
+
+                    responseObserver.onNext(response);
+                }
+
+                // Response is completed once all data is sent
+                responseObserver.onCompleted();
+
+            } catch (IOException e) {
+                System.out.println(String.format("Error reading file: " + filename, e));
+                responseObserver.onError(Status.INTERNAL.withDescription("Error reading file").asRuntimeException());
+            }
+        }
+        else{
+            System.out.println("This node is not responsible for storing the file, sending to correct node...");
+            // retrieve message from chord
+            chordNode.retrieveMessageFromChord(filename);
+        }
+
     }
 
     /*@Override

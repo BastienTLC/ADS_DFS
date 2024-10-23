@@ -17,7 +17,7 @@ public class ChordNode {
     private NodeHeader successor; // Successor of this node
     private NodeHeader predecessor; // Predecessor of this node
     private final FingerTable fingerTable; // Finger table for routing
-    private final int m = 64; // Number of bits for the identifier space
+    private final int m = 5; // Number of bits for the identifier space
     private NodeHeader currentHeader;
     private FileStore fileStore;
     private final boolean multiThreadingEnabled;
@@ -76,7 +76,21 @@ public class ChordNode {
             this.predecessor = currentHeader;
             this.successor = currentHeader;
         }
+
+
+        printResponsibleSpan();
     }
+
+    public void printResponsibleSpan() {
+        if (predecessor == null) {
+            System.out.println("Responsible for entire range: 0 to " + nodeId);
+        } else {
+            String start = predecessor.getNodeId();
+            String end = this.nodeId;
+            System.out.println("Responsible span: (" + start + ", " + end + "]");
+        }
+    }
+
 
     public void leave() {
         // Last node in the network
@@ -150,6 +164,7 @@ public class ChordNode {
                 executeGrpcCall(task);
             }
         }
+        printResponsibleSpan();
     }
 
     // Method to find the successor of a given ID
@@ -265,7 +280,7 @@ public class ChordNode {
         successorClient.setPredecessor(this.currentHeader);
         successorClient.shutdown();
 
-        //Initialize other figer table
+        //Initialize other finger table
         for (int i = 1; i < m; i++) {
             String start = fingerTable.calculateFingerStart(i);
             if (isInIntervalClosedOpen(start, this.nodeId, fingerTable.getFingers().get(i - 1).getNodeId())) {
@@ -281,6 +296,7 @@ public class ChordNode {
         Runnable task = () -> {
             // Hash the key to find the node responsible for storing the file
             String keyId = hashNode(key);
+            System.out.println("Key is: " + key + " and keyId is: " + keyId);
 
             // Find the successor node responsible for the key
             NodeHeader responsibleNode = findSuccessor(keyId);
@@ -296,19 +312,38 @@ public class ChordNode {
         executeGrpcCall(task);
     }
 
-    /*public Message retrieveMessageFromChord(String key) {
+    public void retrieveMessageFromChord(String key) {
         //async not implemented for retrieve
         String keyId = hashNode(key);
 
-        // Find the responsible node
+        // finding the responsible node
+
+        // currently trying to understand why this returns IP and port of current node and not the one of the range we seek
         NodeHeader responsibleNode = findSuccessor(keyId);
 
         ChordClient responsibleNodeClient = new ChordClient(responsibleNode.getIp(), Integer.parseInt(responsibleNode.getPort()));
-        Message message = Wrapper.wrapGrpcMessageToMessage(responsibleNodeClient.retrieveMessage(key));
+        System.out.println("retrieveMessageFromChord(): responsibleNode address is " + responsibleNode.getIp() + ":" + responsibleNode.getPort());
+
+        responsibleNodeClient.retrieveFile(key);
+
+        // Message message = Wrapper.wrapGrpcMessageToMessage(responsibleNodeClient.retrieveMessage(key));
 
         responsibleNodeClient.shutdown();
-        return message;
-    }*/
+        // return message;
+    }
+
+
+    // function for checking if current node is responsible for key (haven't checked if it works)
+    public boolean isResponsibleForKey(String key) {
+        String keyId = hashNode(key);
+        System.out.println("Key is: " + key + " and keyId is: " + keyId);
+
+        if (predecessor == null) {
+            return true;
+        } else {
+            return isInIntervalClosedOpen(keyId, predecessor.getNodeId(), this.nodeId);
+        }
+    }
 
     // Interval checking methods
     private boolean isInIntervalOpenOpen(String id, String start, String end) {
