@@ -77,18 +77,42 @@ public class ChordNode {
             this.successor = currentHeader;
         }
 
-
+        printFingerTable();
         printResponsibleSpan();
     }
 
     public void printResponsibleSpan() {
         if (predecessor == null) {
-            System.out.println("Responsible for entire range: 0 to " + nodeId);
+            System.out.println("Responsible for entire range: 0 to " + (Math.pow(2, m) - 1));
         } else {
-            String start = predecessor.getNodeId();
-            String end = this.nodeId;
-            System.out.println("Responsible span: (" + start + ", " + end + "]");
+            int start = Integer.parseInt(predecessor.getNodeId());
+            int end = Integer.parseInt(this.nodeId);
+
+            if (start < end) {
+                System.out.println("Responsible span: (" + start + ", " + end + "]");
+            } else {
+                // handling the wrap around case
+                System.out.println("Responsible span: (" + start + ", " + (Math.pow(2, m) - 1) + "] and [0, " + end + "]");
+            }
         }
+    }
+
+    public void printFingerTable() {
+        System.out.println("Finger Table for Node ID: " + this.nodeId);
+
+        for (int i = 0; i < m; i++) {
+            NodeHeader finger = fingerTable.getFingers().get(i);
+            String start = fingerTable.calculateFingerStart(i);
+
+            if (finger != null) {
+                System.out.printf("Entry %d: Start = %s, Node ID = %s, Address = %s:%s%n",
+                        i, start, finger.getNodeId(), finger.getIp(), finger.getPort());
+            } else {
+                System.out.printf("Entry %d: Start = %s, Node ID = null%n", i, start);
+            }
+        }
+
+        System.out.println();
     }
 
 
@@ -164,7 +188,9 @@ public class ChordNode {
                 executeGrpcCall(task);
             }
         }
+        System.out.println("---- Updating responsible span and finger table ---- ");
         printResponsibleSpan();
+        printFingerTable();
     }
 
     // Method to find the successor of a given ID
@@ -319,6 +345,7 @@ public class ChordNode {
         // finding the responsible node
 
         // currently trying to understand why this returns IP and port of current node and not the one of the range we seek
+        System.out.println("Finding responseNode of the keyId: " + keyId);
         NodeHeader responsibleNode = findSuccessor(keyId);
 
         ChordClient responsibleNodeClient = new ChordClient(responsibleNode.getIp(), Integer.parseInt(responsibleNode.getPort()));
