@@ -1,5 +1,6 @@
 package com.grpc.server.fileupload.server;
 
+import com.grpc.server.fileupload.server.base.ScheduledTask;
 import com.grpc.server.fileupload.server.interceptor.FileUploadInterceptor;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
@@ -72,6 +73,7 @@ public class ServerApplication implements CommandLineRunner {
 
 		// Create the ChordNode
 		ChordNode node = new ChordNode(host, chordPort, multiThreadingEnabled);
+		ScheduledTask scheduledTask = new ScheduledTask(node);
 
 		// Start the gRPC server
 		ChordServiceImpl chordService = new ChordServiceImpl(node);
@@ -100,6 +102,8 @@ public class ServerApplication implements CommandLineRunner {
 			node.join(joinIp, joinPort);
 			System.out.println("Node joined the network via " + joinIp + ":" + joinPort);
 		}
+
+		scheduledTask.startScheduledTask();
 
 		// Add shutdown hook
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {

@@ -21,7 +21,7 @@ public class ScheduledTask {
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        }, 0, 50, TimeUnit.MILLISECONDS);
+        }, 0, 1000, TimeUnit.MILLISECONDS);
     }
 
     public void stopScheduledTask() {
