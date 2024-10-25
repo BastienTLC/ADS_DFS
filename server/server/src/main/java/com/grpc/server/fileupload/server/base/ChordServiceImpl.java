@@ -408,7 +408,7 @@ public class ChordServiceImpl extends ChordImplBase {
         else{
             System.out.println("This node is not responsible for storing the file, sending to correct node...");
             // retrieve message from chord
-            chordNode.retrieveMessageFromChord(filename);
+            chordNode.retrieveMessageFromChord(filename, responseObserver);
         }
 
     }

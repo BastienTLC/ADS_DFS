@@ -1,7 +1,9 @@
 package com.grpc.server.fileupload.server.base;
 
 
+import com.devProblems.Fileupload;
 import com.grpc.server.fileupload.server.types.NodeHeader;
+import io.grpc.stub.StreamObserver;
 
 import java.math.BigInteger;
 import java.security.MessageDigest;
@@ -338,7 +340,7 @@ public class ChordNode {
         executeGrpcCall(task);
     }
 
-    public void retrieveMessageFromChord(String key) {
+    public void retrieveMessageFromChord(String key, StreamObserver<Fileupload.FileDownloadResponse> originalResponseObserver) {
         //async not implemented for retrieve
         String keyId = hashNode(key);
 
@@ -351,7 +353,7 @@ public class ChordNode {
         ChordClient responsibleNodeClient = new ChordClient(responsibleNode.getIp(), Integer.parseInt(responsibleNode.getPort()));
         System.out.println("retrieveMessageFromChord(): responsibleNode address is " + responsibleNode.getIp() + ":" + responsibleNode.getPort());
 
-        responsibleNodeClient.retrieveFile(key);
+        responsibleNodeClient.retrieveFile(key, originalResponseObserver);
 
         // Message message = Wrapper.wrapGrpcMessageToMessage(responsibleNodeClient.retrieveMessage(key));
 

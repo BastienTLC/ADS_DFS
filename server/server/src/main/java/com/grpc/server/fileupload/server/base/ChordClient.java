@@ -3,6 +3,7 @@ package com.grpc.server.fileupload.server.base;
 import com.devProblems.ChordGrpc;
 import com.devProblems.ChordGrpc.*;
 import com.devProblems.FileUploadServiceGrpc;
+import com.devProblems.Fileupload;
 import com.devProblems.Fileupload.*;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Empty;
@@ -13,6 +14,8 @@ import com.grpc.server.fileupload.server.types.NodeHeader;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 
 import static com.devProblems.ChordGrpc.newBlockingStub;
@@ -143,8 +146,11 @@ public class ChordClient {
 
     }
 
-    public void retrieveFile(String key) {
+    public void retrieveFile(String key, StreamObserver<Fileupload.FileDownloadResponse> originalResponseObserver) {
         System.out.println("retrieveFile called");
+
+        // not verifying meta data right now
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream(); // data stored in RAM
 
         ChordGrpc.ChordStub stub = ChordGrpc.newStub(channel);
 
@@ -153,8 +159,16 @@ public class ChordClient {
                 .build();
         StreamObserver<FileDownloadResponse> responseObserver = new StreamObserver<>() {
             @Override
-            public void onNext(FileDownloadResponse value) {
+            public void onNext(FileDownloadResponse fileDownloadResponse) {
                 System.out.println("Received file chunk...");
+                try {
+                    fileDownloadResponse.getFile().getContent()
+                            .writeTo(byteArrayOutputStream);
+                } catch (IOException e) {
+                    System.err.println("Couldn't write data in retrieveFile!");
+                    throw new RuntimeException(e);
+                }
+
             }
 
             @Override
@@ -165,7 +179,18 @@ public class ChordClient {
 
             @Override
             public void onCompleted() {
-                System.out.println("File retrieval completed.");
+                // building response to the client
+                File finalFile = File.newBuilder()
+                        .setContent(ByteString.copyFrom(byteArrayOutputStream.toByteArray()))
+                        .setFileName(key)
+                        .build();
+
+                FileDownloadResponse finalResponse = FileDownloadResponse.newBuilder()
+                        .setFile(finalFile)
+                        .build();
+
+                originalResponseObserver.onNext(finalResponse);
+                originalResponseObserver.onCompleted();
             }
         };
 
