@@ -2,6 +2,7 @@ package com.grpc.server.fileupload.server.utils;
 
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
@@ -18,11 +19,20 @@ public class DiskFileStorage {
         return this.byteArrayOutputStream;
     }
 
-    public void write(String fileNameWithType) throws IOException {
-        String DEFAULT_PATH = "output/";
-        try (FileOutputStream fileOutputStream = new FileOutputStream(DEFAULT_PATH.concat(fileNameWithType))) {
+    public void write(String fileNameWithType, String nodeId) throws IOException {
+        String defaultPath = "output/";
+        defaultPath = createDirectory(defaultPath.concat(nodeId).concat("/"));
+        try (FileOutputStream fileOutputStream = new FileOutputStream(defaultPath.concat(fileNameWithType))) {
             this.byteArrayOutputStream.writeTo(fileOutputStream);
         }
+    }
+
+    private String createDirectory(String path) {
+        File directory = new File(path);
+        if (!directory.exists()) {
+            directory.mkdirs();
+        }
+        return path;
     }
 
     public void close() throws IOException {

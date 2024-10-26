@@ -159,7 +159,7 @@ public class ChordServiceImpl extends ChordImplBase {
     @Override
     public void retrieveFile(FileDownloadRequest request, StreamObserver<FileDownloadResponse> responseObserver) {
         String filename = request.getFileName();
-        String filePath = "output/" + filename;
+        String filePath = "output/" + this.chordNode.getNodeId() + "/" + filename;
         java.io.File file = new java.io.File(filePath);
 
         if (!file.exists() || !file.isFile()) {
@@ -239,8 +239,7 @@ public class ChordServiceImpl extends ChordImplBase {
                     // it is the same that the server has received
                     if (totalBytesReceived == fileMetadata.getContentLength()) {
                         // if matches we write to the diskFileStorage
-                        diskFileStorage.write(fileMetadata.getFileNameWithType());
-                        //chordNode.getMessageStore().addFileMetadata(fileMetadata.getFileNameWithType(), fileMetadata);
+                        diskFileStorage.write(fileMetadata.getFileNameWithType(), chordNode.getNodeId());
                         diskFileStorage.close();
                     } else {
                         // notifying the client with error
