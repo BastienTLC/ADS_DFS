@@ -119,11 +119,12 @@ public class ChordNode {
 
 
     public void leave() {
-        // Last node in the network
-        if (this.predecessor.equals(this.currentHeader) && this.successor.equals(this.currentHeader)) {
+        if (this.successor != null && !this.successor.equals(this.currentHeader)) {
+            // No keys to transfer since this node doesn't store any files
+        }
 
-        } else {
-            // Transfer keys
+        // Update successor and predecessor pointers
+        if (this.predecessor != null && this.successor != null) {
             final String predecessorIp = predecessor.getIp();
             final int predecessorPort = Integer.parseInt(predecessor.getPort());
             final String successorIp = successor.getIp();
@@ -132,19 +133,25 @@ public class ChordNode {
             Runnable task = () -> {
                 ChordClient predecessorClient = new ChordClient(predecessorIp, predecessorPort);
                 ChordClient successorClient = new ChordClient(successorIp, successorPort);
+
                 predecessorClient.setSuccessor(successor);
                 successorClient.setPredecessor(predecessor);
+
                 predecessorClient.shutdown();
                 successorClient.shutdown();
             };
 
             executeGrpcCall(task);
-
-            this.successor = null;
-            this.predecessor = null;
-            this.updateOthers();
         }
+
+        // Nullify own pointers
+        this.successor = null;
+        this.predecessor = null;
+
+        // Shutdown the executor service if necessary
+        shutdown();
     }
+
 
     // Method to update other nodes finger tables
     public void updateOthers() {
@@ -360,6 +367,8 @@ public class ChordNode {
         responsibleNodeClient.shutdown();
         // return message;
     }
+
+
 
 
     // function for checking if current node is responsible for key (haven't checked if it works)
