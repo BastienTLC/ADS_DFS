@@ -3,12 +3,13 @@ package com.grpc.server.fileupload.server.base;
 
 import com.devProblems.Fileupload;
 import com.grpc.server.fileupload.server.types.NodeHeader;
+import com.grpc.server.fileupload.server.utils.TreeBasedReplication;
 import io.grpc.stub.StreamObserver;
 
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -326,15 +327,39 @@ public class ChordNode {
             String keyId = hashNode(key);
             System.out.println("Key is: " + key + " and keyId is: " + keyId);
 
-            // Find the successor node responsible for the key
-            NodeHeader responsibleNode = findSuccessor(keyId);
+            int maxDepth = 1;
 
-            ChordClient responsibleNodeClient = new ChordClient(responsibleNode.getIp(), Integer.parseInt(responsibleNode.getPort()));
+            TreeBasedReplication treeReplication = new TreeBasedReplication(m);
 
-            // Store the file on the responsible node
-            responsibleNodeClient.storeFile(key, fileContent);
+            Map<Integer, List<Integer>> replicaTree = treeReplication.generateReplicaTree(Integer.parseInt(keyId), maxDepth);
+            // treeReplication.displayTree(replicaTree);
+            List<Integer> leafNodes = treeReplication.getLeafNodes(replicaTree);
+            System.out.println("Leaf Nodes: " + leafNodes);
 
-            responsibleNodeClient.shutdown();
+            // tracking nodes we've sent files to so same data not sent multiple times
+            Set<String> storedNodeIdentifiers = new HashSet<>();
+
+            for (Integer replicaKey : leafNodes) {
+                NodeHeader responsibleNode = findSuccessor(replicaKey.toString());
+
+                // line below is used to keep track which ip:ports we have sent files to already, so we don't do it again
+                String nodeIdentifier = responsibleNode.getIp() + ":" + responsibleNode.getPort();
+
+                // current implementation makes a GRPC call to itself if it is the responsible node
+                if (storedNodeIdentifiers.add(nodeIdentifier)) {  // this returns false if already present
+                    // if (responsibleNode.getIp().equals(this.ip) &&
+                    //         Integer.parseInt(responsibleNode.getPort()) == (this.port)) {
+                    // }
+
+                    System.out.println("responsibleNode (" + responsibleNode.getIp() + ":" + Integer.parseInt(responsibleNode.getPort())
+                            + ") found, responsible for key: " + replicaKey);
+                    ChordClient responsibleNodeClient = new ChordClient(responsibleNode.getIp(), Integer.parseInt(responsibleNode.getPort()));
+
+                    responsibleNodeClient.storeFile(String.valueOf(replicaKey), fileContent);
+                    responsibleNodeClient.shutdown();
+                }
+
+            }
         };
 
         executeGrpcCall(task);
