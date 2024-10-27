@@ -1,26 +1,26 @@
-// FileDownloadService.java
 package com.grpc.client.fileupload.client.service;
-
 
 import com.devProblems.Fileupload.FileDownloadRequest;
 import com.devProblems.Fileupload.FileDownloadResponse;
+import com.grpc.client.fileupload.client.utils.CrypteUtil;
 import com.grpc.client.fileupload.client.utils.DiskFileStorage;
-import com.grpc.client.fileupload.client.utils.NodeInfo;
 import io.grpc.Metadata;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import javax.crypto.SecretKey;
 import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.util.concurrent.CountDownLatch;
 
 @Slf4j
 @Service
+// Have not added proper verification of metadata yet like we do when uploading file yet
+// Otherwise it seems to work
 public class FileDownloadService extends BaseFileService {
 
-    // Have not added proper verification of metadata yet like we do when uploading file yet
-    // Otherwise it seems to work
     public String downloadFile(String fileName) {
         StringBuilder response = new StringBuilder();
         CountDownLatch countDownLatch = new CountDownLatch(1);
@@ -32,23 +32,35 @@ public class FileDownloadService extends BaseFileService {
 
         DiskFileStorage diskFileStorage = new DiskFileStorage();
 
-        //setting up the channel
-        // super.createRandomChannelFromBootstrap();
-
-        // later this will be changed where the user can specify the IP:port of any node in the network,
-        // alternative a bootstrap service can be used to get random ip:port
+        // Setting up the channel
+        // Later this will be changed where the user can specify the IP:port of any node in the network,
+        // alternatively a bootstrap service can be used to get random ip:port
         super.createChannel("localhost", "8000");
+
+        // Load the AES decryption key
+        SecretKey secretKey = CrypteUtil.LoadSecretKey();
+        if (secretKey == null) {
+            return "Failed to load decryption key!";
+        }
 
         client.withInterceptors(MetadataUtils.newAttachHeadersInterceptor(metadata))
                 .retrieveFileFromChord(request, new StreamObserver<FileDownloadResponse>() {
                     @Override
                     public void onNext(FileDownloadResponse fileDownloadResponse) {
-                        log.info(String.format("received %d length of data", fileDownloadResponse.getFile().getContent().size()));
+                        log.info(String.format("Received %d length of data", fileDownloadResponse.getFile().getContent().size()));
                         try {
-                            fileDownloadResponse.getFile().getContent().writeTo(diskFileStorage.getStream());
-                        } catch (IOException e) {
+                            // Decrypt the data received from the server
+                            byte[] encryptedData = fileDownloadResponse.getFile().getContent().toByteArray();
+                            byte[] decryptedData = CrypteUtil.DecryptData(encryptedData, secretKey);
+                            if (decryptedData == null) {
+                                throw new GeneralSecurityException("Failed to decrypt the data.");
+                            }
+
+                            // Write the decrypted data to the disk
+                            diskFileStorage.getStream().write(decryptedData);
+                        } catch (IOException | GeneralSecurityException e) {
                             onError(io.grpc.Status.INTERNAL
-                                    .withDescription("cannot write data due to : " + e.getMessage())
+                                    .withDescription("Cannot write data due to: " + e.getMessage())
                                     .asRuntimeException());
                         }
                     }
@@ -63,10 +75,10 @@ public class FileDownloadService extends BaseFileService {
                     @Override
                     public void onCompleted() {
                         try {
-                            // after receiving all data, writing it to file
+                            // After receiving all data, writing it to the file
                             diskFileStorage.write(fileName);
                             diskFileStorage.close();
-                            response.append("File downloaded successfully: ").append(fileName);
+                            response.append("File downloaded and decrypted successfully: ").append(fileName);
                         } catch (IOException e) {
                             log.error("Error occurred while saving the file: {}", e.getMessage());
                             response.append("Error occurred while saving the file.");

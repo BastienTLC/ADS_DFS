@@ -4,16 +4,28 @@ package com.grpc.client.fileupload.client.service;
 import com.devProblems.Fileupload.*;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Empty;
+import com.grpc.client.fileupload.client.model.User;
+import com.grpc.client.fileupload.client.repository.UserRepository;
+import com.grpc.client.fileupload.client.utils.CrypteUtil;
 import com.grpc.client.fileupload.client.utils.NodeInfo;
 import io.grpc.Metadata;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.crypto.SecretKey;
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.concurrent.CountDownLatch;
 
 @Slf4j
@@ -21,16 +33,31 @@ import java.util.concurrent.CountDownLatch;
 // since we now have both an upload and download method
 public class FileUploadService extends BaseFileService {
 
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private CustomUserDetailsService customUserDetailsService;
+
+
+
     public String uploadFile(final MultipartFile multipartFile) {
+
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        //UserDetails userDetails = customUserDetailsService.loadUserByUsername(username);
+
+
+
         String fileName; // provided by client
         int fileSize;
         InputStream inputStream;
+        byte[] fileData;
         fileName = multipartFile.getOriginalFilename();
 
         System.out.println("test!");
 
-        try {
-            fileSize = multipartFile.getBytes().length;
+        try {;
+            fileData = multipartFile.getBytes();
             inputStream = multipartFile.getInputStream();
         } catch (IOException e) {
             return "Unable to read the file!";
@@ -43,9 +70,25 @@ public class FileUploadService extends BaseFileService {
 
         CountDownLatch countDownLatch = new CountDownLatch(1);
 
-        Metadata metadata = createMetadata(fileName, fileSize);
+        // Load the AES encryption key
+        SecretKey secretKey = CrypteUtil.LoadSecretKey();
+        if (secretKey == null) {
+            return "Failed to load encryption key!";
+        }
+
+        // Encrypt the entire file data
+        byte[] encryptedData = CrypteUtil.EncryptData(fileData, secretKey);
+        if (encryptedData == null) {
+            return "Failed to encrypt the file!";
+        }
+
+
+        // Create metadata with the size of the encrypted data
+        Metadata metadata = createMetadata(fileName, encryptedData.length);
 
         super.createChannel("localhost", "8000");
+
+
 
         // using fileUploadRequestStreamObserver we will stream the file content to the server
         StreamObserver<FileUploadRequest> fileUploadRequestStreamObserver = this.client
@@ -73,17 +116,21 @@ public class FileUploadService extends BaseFileService {
                             }
                         });
 
-        byte[] fiveKB = new byte[5120];
-
-        int length;
-
+        int offset = 0;
+        int chunkSize = 5120; // 5KB
         // reading bytes and adding it to the byte array
         try {
-            while ((length = inputStream.read(fiveKB)) > 0) {
-                log.info(String.format("sending %d length of data", length));
+            while (offset < encryptedData.length) {
+                int end = Math.min(offset + chunkSize, encryptedData.length);
+                byte[] chunk = new byte[end - offset];
+                System.arraycopy(encryptedData, offset, chunk, 0, end - offset);
+                offset = end;
+                log.info(String.format("Sending chunk of size %d", chunk.length));
+
+
                 var request = FileUploadRequest
                         .newBuilder()
-                        .setFile(File.newBuilder().setContent(ByteString.copyFrom(fiveKB, 0, length)))
+                        .setFile(File.newBuilder().setContent(ByteString.copyFrom(chunk)))
                         .build();
                 // sending the request that contains the chunked data of file
                 fileUploadRequestStreamObserver.onNext(request);
