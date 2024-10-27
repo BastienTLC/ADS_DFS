@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.concurrent.CountDownLatch;
@@ -44,7 +45,7 @@ public class FileUploadService extends BaseFileService {
     public String uploadFile(final MultipartFile multipartFile) {
 
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
-        //UserDetails userDetails = customUserDetailsService.loadUserByUsername(username);
+        User user = userRepository.findByUsername(username).orElseThrow(() -> new RuntimeException("User not found"));
 
 
 
@@ -112,7 +113,31 @@ public class FileUploadService extends BaseFileService {
                             @Override
                             public void onCompleted() {
                                 // called when server finished serving the request
-                                countDownLatch.countDown();
+                                try {
+                                    com.grpc.client.fileupload.client.model.File file = new com.grpc.client.fileupload.client.model.File();
+                                    file.setFileSize((long) encryptedData.length);
+                                    file.setFileName(fileName);
+                                    file.setUser(user);
+
+                                    // Ensure the user's file list is initialized
+                                    if (user.getFiles() == null) {
+                                        user.setFiles(new ArrayList<>());
+                                    }
+
+                                    // Add the file to the user's list of files
+                                    user.getFiles().add(file);
+
+                                    // Save the user, which will also save the file due to CascadeType.ALL
+                                    userRepository.save(user);
+
+                                    response.append(UploadStatus.SUCCESS);
+                                    log.info("File successfully uploaded and associated with user");
+                                } catch (Exception e) {
+                                    log.error("Failed to save file to the database", e);
+                                    response.append("Failed to save file to the database.");
+                                } finally {
+                                    countDownLatch.countDown();
+                                }
                             }
                         });
 
