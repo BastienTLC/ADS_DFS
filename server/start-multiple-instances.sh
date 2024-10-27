@@ -18,6 +18,8 @@ if [ "$NUM_NODES" -ge 1 ]; then
   java -jar $JAR_PATH --bootstrap &
 fi
 
+sleep 5
+
 # Start additional instances if there are more than one node
 for ((i=2; i<=NUM_NODES; i++)); do
   echo "Starting instance $i without specific arguments..."
@@ -27,4 +29,3 @@ done
 
 # Wait for all background processes to finish
 wait
-
