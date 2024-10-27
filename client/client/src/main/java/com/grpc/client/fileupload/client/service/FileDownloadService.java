@@ -38,7 +38,7 @@ public class FileDownloadService extends BaseFileService {
         // Setting up the channel
         // Later this will be changed where the user can specify the IP:port of any node in the network,
         // alternatively a bootstrap service can be used to get random ip:port
-        super.createChannel("localhost", "8000");
+        super.createChannelFromBootstrap();
 
         // Load the AES decryption key
         SecretKey secretKey = CrypteUtil.LoadSecretKey();

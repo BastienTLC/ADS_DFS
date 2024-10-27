@@ -205,9 +205,6 @@ public class ChordServiceImpl extends ChordImplBase {
             System.out.println(String.format("Error reading file: " + filename, e));
             responseObserver.onError(Status.INTERNAL.withDescription("Error reading file").asRuntimeException());
         }
-
-
-
     }
 
 
@@ -377,58 +374,7 @@ public class ChordServiceImpl extends ChordImplBase {
     public void retrieveFileFromChord(FileDownloadRequest request, StreamObserver<FileDownloadResponse> responseObserver) {
         String filename = request.getFileName();
         String requester = request.getRequester();
-        System.out.println(String.format("Received download request for filename: " + filename));
-
-
-        // Logic for retrieving file remains the same if this node is responsible for storing it
-        if (chordNode.isResponsibleForKey(filename)) {
-            String filePath = "output/" + requester +"/" + filename;
-            java.io.File file = new java.io.File(filePath);
-
-            if (!file.exists() || !file.isFile()) {
-                System.out.println(String.format("File not found: " + filename));
-                responseObserver.onError(Status.NOT_FOUND.withDescription("File not found").asRuntimeException());
-                return;
-            }
-            FileMetadata fileMetadata = Constants.fileMetaContext.get();
-            if (!fileMetadata.getAuthor().equals(requester)) {
-                System.out.println("Requester is not the author of the file");
-                responseObserver.onError(Status.PERMISSION_DENIED.withDescription("Requester is not the author of the file").asRuntimeException());
-                return;
-            }
-
-            byte[] fiveKB = new byte[5120];
-            int length;
-
-            try (InputStream inputStream = new FileInputStream(file)) {
-                // Reading bytes and sending them to the client
-                while ((length = inputStream.read(fiveKB)) > 0) {
-                    System.out.println(String.format("Sending %d length of data", length));
-                    File fileMessage = File.newBuilder()
-                            .setContent(ByteString.copyFrom(fiveKB, 0, length))
-                            .build();
-
-                    FileDownloadResponse response = FileDownloadResponse.newBuilder()
-                            .setFile(fileMessage)  // Use the File message containing the content
-                            .build();
-
-                    responseObserver.onNext(response);
-                }
-
-                // Response is completed once all data is sent
-                responseObserver.onCompleted();
-
-            } catch (IOException e) {
-                System.out.println(String.format("Error reading file: " + filename, e));
-                responseObserver.onError(Status.INTERNAL.withDescription("Error reading file").asRuntimeException());
-            }
-        }
-        else{
-            System.out.println("This node is not responsible for storing the file, sending to correct node...");
-            // retrieve message from chord
-            chordNode.retrieveMessageFromChord(filename,requester, responseObserver);
-        }
-
+        chordNode.retrieveMessageFromChord(filename, requester, responseObserver);
     }
 
     /*@Override

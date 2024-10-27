@@ -43,26 +43,12 @@ public abstract class BaseFileService {
     }
 
     // Set the client and blocking client channel to a random server
-    protected void createRandomChannelFromBootstrap() {
-        NodeInfo randomServer = bootstrapService.getRandomServer();
-        if (randomServer == null) {
-            throw new RuntimeException("Could not retrieve server information from the bootstrap service.");
-        }
-
-        this.setBlockingClient(randomServer);
-        this.setClient(randomServer);
+    protected void createChannelFromBootstrap() {
+        NodeInfo nodeInfo = bootstrapService.getServer();
+        setBlockingClient(nodeInfo);
+        setClient(nodeInfo);
     }
 
-    // Set the client and blocking client channel to a server with the given hash
-    protected void createDeterministicChannelFromBootstrap(String fileName) {
-        NodeInfo nodeInfo = bootstrapService.getNodeByHash(fileName);
-        if (nodeInfo == null) {
-            throw new RuntimeException("Could not retrieve server information from the bootstrap service.");
-        }
-
-        this.setBlockingClient(nodeInfo);
-        this.setClient(nodeInfo);
-    }
 
     // Set the client and blocking client channel to a server with the given IP and port
     protected void createChannel(String ip, String port) {

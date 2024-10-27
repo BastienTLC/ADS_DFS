@@ -3,6 +3,7 @@ package com.grpc.server.fileupload.server.base;
 
 import com.devProblems.Fileupload;
 import com.grpc.server.fileupload.server.types.NodeHeader;
+import com.grpc.server.fileupload.server.utils.LoadBalancer;
 import com.grpc.server.fileupload.server.utils.TreeBasedReplication;
 import io.grpc.stub.StreamObserver;
 
@@ -25,8 +26,9 @@ public class ChordNode {
     private FileStore fileStore;
     private final boolean multiThreadingEnabled;
     private final ExecutorService executorService;
+    private final LoadBalancer loadBalancer;
 
-    public ChordNode(String ip, int port, boolean multiThreadingEnabled) {
+    public ChordNode(String ip, int port, boolean multiThreadingEnabled, LoadBalancer loadBalancer) {
         this.ip = ip;
         this.port = port;
         this.multiThreadingEnabled = multiThreadingEnabled;
@@ -39,6 +41,7 @@ public class ChordNode {
         this.fingerTable = new FingerTable(this, m);
         this.currentHeader = new NodeHeader(ip, port, nodeId);
         this.fileStore = new FileStore();
+        this.loadBalancer = loadBalancer;
     }
 
     // Function to hash the node ID based on IP and port
@@ -80,6 +83,9 @@ public class ChordNode {
             this.successor = currentHeader;
         }
 
+        //call loadbalancer to register the node (ip, port)
+        loadBalancer.registerNode(this.ip, this.port);
+
         printFingerTable();
         printResponsibleSpan();
     }
@@ -120,6 +126,7 @@ public class ChordNode {
 
 
     public void leave() {
+        loadBalancer.deregisterNode(this.ip, this.port);
         if (this.successor != null && !this.successor.equals(this.currentHeader)) {
             // No keys to transfer since this node doesn't store any files
         }

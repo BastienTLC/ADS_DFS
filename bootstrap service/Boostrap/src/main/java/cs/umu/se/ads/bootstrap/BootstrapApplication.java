@@ -15,12 +15,23 @@ import java.util.concurrent.ThreadLocalRandom;
 public class BootstrapApplication {
 
     private static final Map<String, NodeInfo> currentNodes = new ConcurrentHashMap<>();
+    private int roundRobinIndex = 0;
+    private static String loadBalancingStrategy = "random"; // Default strategy is random
 
-    public static void main(String[] args)
-    {
+    public static void main(String[] args) {
         int port = 8085;
         SpringApplication app = new SpringApplication(BootstrapApplication.class);
         app.setDefaultProperties(Collections.singletonMap("server.port", String.valueOf(port)));
+
+        // Set the load balancing strategy based on the program argument
+        if (args.length > 0) {
+            if ("roundRobin".equalsIgnoreCase(args[0])) {
+                loadBalancingStrategy = "roundRobin";
+            } else if ("random".equalsIgnoreCase(args[0])) {
+                loadBalancingStrategy = "random";
+            }
+        }
+
         app.run(args);
     }
 
@@ -58,7 +69,6 @@ public class BootstrapApplication {
         return ResponseEntity.ok(new ArrayList<>(currentNodes.values()));
     }
 
-
     @GetMapping("/getRandomServer")
     public ResponseEntity<NodeInfo> getRandomServer() {
         List<NodeInfo> serverList = new ArrayList<>(currentNodes.values());
@@ -70,74 +80,36 @@ public class BootstrapApplication {
         int randomIndex = ThreadLocalRandom.current().nextInt(serverList.size());
         NodeInfo randomNode = serverList.get(randomIndex);
 
-        System.out.println("Returning random node: '" + randomNode.getIp() + ":" + randomNode.getPort()  + "'");
+        System.out.println("Returning random node: '" + randomNode.getIp() + ":" + randomNode.getPort() + "'");
 
         return ResponseEntity.ok(randomNode);
     }
 
+    @GetMapping("/getRoundRobinServer")
+    public ResponseEntity<NodeInfo> getRoundRobinServer() {
+        List<NodeInfo> serverList = new ArrayList<>(currentNodes.values());
 
-    @GetMapping("/getNodeForFile")
-    public ResponseEntity<NodeInfo> getNodeForFile(@RequestParam String fileName) {
-        if (currentNodes.isEmpty()) {
+        if (serverList.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         }
-        // Compute hash of the file name
-        int fileHash = Objects.hash(fileName);
-        // Find the closest node to the hash by comparing the hash of the node
-        NodeInfo selectedNode = findClosestNode(fileHash);
 
-        System.out.println("Returning the node: '" + selectedNode.getIp() + ":" + selectedNode.getPort()  + "'"
-            + " for the file: '" + fileName + "'" + "with the hash: " + fileHash);
+        NodeInfo roundRobinNode = serverList.get(roundRobinIndex);
+        roundRobinIndex = (roundRobinIndex + 1) % serverList.size();
 
-        return ResponseEntity.ok(selectedNode);
+        System.out.println("Returning round robin node: '" + roundRobinNode.getIp() + ":" + roundRobinNode.getPort() + "'");
+
+        return ResponseEntity.ok(roundRobinNode);
     }
 
-    //function to get the replica nodes for a file
-    //The function will return all the nodes except the selected node
-    //Need to implement other strategies for replica selection
-    @GetMapping("/getReplicaNodes")
-    public ResponseEntity<List<NodeInfo>> getReplicaNodes(@RequestParam String fileName) {
-        if (currentNodes.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+    // New endpoint to get a server based on the configured load balancing strategy
+    @GetMapping("/getServer")
+    public ResponseEntity<NodeInfo> getServer() {
+        if ("roundRobin".equalsIgnoreCase(loadBalancingStrategy)) {
+            // Use the round-robin strategy
+            return getRoundRobinServer();
+        } else {
+            // Default to random strategy
+            return getRandomServer();
         }
-        // Compute hash of the file name
-        int fileHash = Objects.hash(fileName);
-        // Find the closest node to the hash by comparing the hash of the node
-        NodeInfo selectedNode = findClosestNode(fileHash);
-        List<NodeInfo> replicaNodes = new ArrayList<>();
-        for (NodeInfo node : currentNodes.values()) {
-            if (!node.equals(selectedNode)) {
-                replicaNodes.add(node);
-            }
-        }
-
-        return ResponseEntity.ok(replicaNodes);
     }
-
-    @GetMapping("/getReplicaNode")
-    public ResponseEntity<List<NodeInfo>> getReplicaNodes(@RequestParam String fileName, @RequestParam int replicaNb){
-        //need to be implemented
-        return ResponseEntity.ok(new ArrayList<>(currentNodes.values()));
-    }
-
-
-
-    private NodeInfo findClosestNode(int fileHash) {
-        NodeInfo closestNode = null;
-        int closestDistance = Integer.MAX_VALUE;
-
-        for (NodeInfo node : currentNodes.values()) {
-            int nodeHash = node.getHashCode();
-            int distance = Math.abs(nodeHash - fileHash);
-
-            if (distance < closestDistance) {
-                closestDistance = distance;
-                closestNode = node;
-            }
-        }
-
-        return closestNode;
-    }
-
-
 }

@@ -2,6 +2,7 @@ package com.grpc.server.fileupload.server;
 
 import com.grpc.server.fileupload.server.base.ScheduledTask;
 import com.grpc.server.fileupload.server.interceptor.FileUploadInterceptor;
+import com.grpc.server.fileupload.server.utils.LoadBalancer;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import org.springframework.boot.SpringApplication;
@@ -70,9 +71,10 @@ public class ServerApplication implements CommandLineRunner {
 
 		// Determine the Chord node's port
 		int chordPort = findAvailablePort(8000, 9000);
+		LoadBalancer loadBalancer = new LoadBalancer("http://localhost:8085");
 
 		// Create the ChordNode
-		ChordNode node = new ChordNode(host, chordPort, multiThreadingEnabled);
+		ChordNode node = new ChordNode(host, chordPort, multiThreadingEnabled, loadBalancer);
 		ScheduledTask scheduledTask = new ScheduledTask(node);
 
 		// Start the gRPC server

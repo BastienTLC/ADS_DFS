@@ -29,12 +29,22 @@ public class BootstrapService {
         }
     }
 
-    public NodeInfo getNodeByHash(String fileName) {
-        String url = bootstrapUrl + "/getNodeForFile?fileName=" + fileName;
+    public NodeInfo getRoundRobinServer() {
+        String url = bootstrapUrl + "/getRoundRobinServer";
         try {
             return restTemplate.getForObject(url, NodeInfo.class);
         } catch (Exception e) {
-            System.err.println("Failed to get a node by hash from bootstrap: " + e.getMessage());
+            System.err.println("Failed to get a round robin server from bootstrap: " + e.getMessage());
+            return null;
+        }
+    }
+
+    public NodeInfo getServer(){
+        String url = bootstrapUrl + "/getServer";
+        try {
+            return restTemplate.getForObject(url, NodeInfo.class);
+        } catch (Exception e) {
+            System.err.println("Failed to get a server from bootstrap: " + e.getMessage());
             return null;
         }
     }
