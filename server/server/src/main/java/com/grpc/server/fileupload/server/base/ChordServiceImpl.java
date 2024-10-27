@@ -4,7 +4,6 @@ import com.devProblems.Fileupload.*;
 import com.devProblems.ChordGrpc.*;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Empty;
-import com.grpc.server.fileupload.server.types.FileMetadataModel;
 import com.grpc.server.fileupload.server.utils.DiskFileStorage;
 import com.shared.proto.Constants;
 
@@ -12,6 +11,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.attribute.BasicFileAttributes;
 
 import com.grpc.server.fileupload.server.types.NodeHeader;
 import io.grpc.Status;
@@ -159,14 +162,23 @@ public class ChordServiceImpl extends ChordImplBase {
     @Override
     public void retrieveFile(FileDownloadRequest request, StreamObserver<FileDownloadResponse> responseObserver) {
         String filename = request.getFileName();
-        String filePath = "output/" + this.chordNode.getNodeId() + "/" + filename;
+        String requester = request.getRequester();
+        String filePath = "output/" + this.chordNode.getNodeId() + "/" + requester + "/" + filename;
         java.io.File file = new java.io.File(filePath);
+        java.io.File parentDir = file.getParentFile();
+
+        if (!parentDir.exists()) {
+            System.out.println(String.format("Directory not found: %s", parentDir.getPath()));
+            responseObserver.onError(Status.PERMISSION_DENIED.withDescription("Directory not found").asRuntimeException());
+            return;
+        }
 
         if (!file.exists() || !file.isFile()) {
-            System.out.println(String.format("File not found: " + filename));
+            System.out.println(String.format("File not found: %s", filename));
             responseObserver.onError(Status.NOT_FOUND.withDescription("File not found").asRuntimeException());
             return;
         }
+
 
         byte[] fiveKB = new byte[5120];
         int length;
@@ -239,7 +251,7 @@ public class ChordServiceImpl extends ChordImplBase {
                     // it is the same that the server has received
                     if (totalBytesReceived == fileMetadata.getContentLength()) {
                         // if matches we write to the diskFileStorage
-                        diskFileStorage.write(fileMetadata.getFileNameWithType(), chordNode.getNodeId());
+                        diskFileStorage.write(fileMetadata.getFileNameWithType(),fileMetadata.getAuthor(), chordNode.getNodeId());
                         diskFileStorage.close();
                     } else {
                         // notifying the client with error
@@ -364,17 +376,24 @@ public class ChordServiceImpl extends ChordImplBase {
     @Override
     public void retrieveFileFromChord(FileDownloadRequest request, StreamObserver<FileDownloadResponse> responseObserver) {
         String filename = request.getFileName();
+        String requester = request.getRequester();
         System.out.println(String.format("Received download request for filename: " + filename));
 
 
         // Logic for retrieving file remains the same if this node is responsible for storing it
         if (chordNode.isResponsibleForKey(filename)) {
-            String filePath = "output/" + filename;
+            String filePath = "output/" + requester +"/" + filename;
             java.io.File file = new java.io.File(filePath);
 
             if (!file.exists() || !file.isFile()) {
                 System.out.println(String.format("File not found: " + filename));
                 responseObserver.onError(Status.NOT_FOUND.withDescription("File not found").asRuntimeException());
+                return;
+            }
+            FileMetadata fileMetadata = Constants.fileMetaContext.get();
+            if (!fileMetadata.getAuthor().equals(requester)) {
+                System.out.println("Requester is not the author of the file");
+                responseObserver.onError(Status.PERMISSION_DENIED.withDescription("Requester is not the author of the file").asRuntimeException());
                 return;
             }
 
@@ -407,7 +426,7 @@ public class ChordServiceImpl extends ChordImplBase {
         else{
             System.out.println("This node is not responsible for storing the file, sending to correct node...");
             // retrieve message from chord
-            chordNode.retrieveMessageFromChord(filename, responseObserver);
+            chordNode.retrieveMessageFromChord(filename,requester, responseObserver);
         }
 
     }

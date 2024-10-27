@@ -372,7 +372,7 @@ public class ChordNode {
         executeGrpcCall(task);
     }
 
-    public void retrieveMessageFromChord(String key, StreamObserver<Fileupload.FileDownloadResponse> originalResponseObserver) {
+    public void retrieveMessageFromChord(String key,String requester, StreamObserver<Fileupload.FileDownloadResponse> originalResponseObserver) {
         //async not implemented for retrieve
         String keyId = hashNode(key);
 
@@ -385,7 +385,7 @@ public class ChordNode {
         ChordClient responsibleNodeClient = new ChordClient(responsibleNode.getIp(), Integer.parseInt(responsibleNode.getPort()));
         System.out.println("retrieveMessageFromChord(): responsibleNode address is " + responsibleNode.getIp() + ":" + responsibleNode.getPort());
 
-        responsibleNodeClient.retrieveFile(key, originalResponseObserver);
+        responsibleNodeClient.retrieveFile(key, requester, originalResponseObserver);
 
         // Message message = Wrapper.wrapGrpcMessageToMessage(responsibleNodeClient.retrieveMessage(key));
 

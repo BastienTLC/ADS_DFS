@@ -8,7 +8,7 @@ import io.grpc.*;
 public class FileUploadInterceptor implements ServerInterceptor {
 
     @Override
-    public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+    public  <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
             ServerCall<ReqT, RespT> serverCall,
             Metadata metadata,
             ServerCallHandler<ReqT, RespT> serverCallHandler) {

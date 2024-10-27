@@ -71,12 +71,13 @@ public abstract class BaseFileService {
         blockingClient = FileOperationsServiceGrpc.newBlockingStub(channel);
     }
 
-    protected Metadata createMetadata(String fileName, int fileSize) {
+    protected Metadata createMetadata(String fileName, int fileSize, String author) {
         Metadata metadata = new Metadata();
         metadata.put(Constants.fileMetadataKey,
                 FileMetadata.newBuilder()
                         .setFileNameWithType(fileName)
                         .setContentLength(fileSize)
+                        .setAuthor(author)
                         .build()
                         .toByteArray());
         return metadata;

@@ -19,9 +19,10 @@ public class DiskFileStorage {
         return this.byteArrayOutputStream;
     }
 
-    public void write(String fileNameWithType, String nodeId) throws IOException {
+    public void write(String fileNameWithType, String author, String nodeId) throws IOException {
         String defaultPath = "output/";
         defaultPath = createDirectory(defaultPath.concat(nodeId).concat("/"));
+        defaultPath = createDirectory(defaultPath.concat(author).concat("/"));
         try (FileOutputStream fileOutputStream = new FileOutputStream(defaultPath.concat(fileNameWithType))) {
             this.byteArrayOutputStream.writeTo(fileOutputStream);
         }

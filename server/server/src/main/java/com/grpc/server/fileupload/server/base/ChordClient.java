@@ -7,7 +7,6 @@ import com.devProblems.Fileupload;
 import com.devProblems.Fileupload.*;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Empty;
-import com.grpc.server.fileupload.server.types.FileMetadataModel;
 import com.shared.proto.Constants;
 import io.grpc.*;
 import com.grpc.server.fileupload.server.types.NodeHeader;
@@ -146,7 +145,7 @@ public class ChordClient {
 
     }
 
-    public void retrieveFile(String key, StreamObserver<Fileupload.FileDownloadResponse> originalResponseObserver) {
+    public void retrieveFile(String key, String requester, StreamObserver<Fileupload.FileDownloadResponse> originalResponseObserver) {
         System.out.println("retrieveFile called");
 
         // not verifying meta data right now
@@ -156,6 +155,7 @@ public class ChordClient {
 
         FileDownloadRequest request = FileDownloadRequest.newBuilder()
                 .setFileName(key)
+                .setRequester(requester)
                 .build();
         StreamObserver<FileDownloadResponse> responseObserver = new StreamObserver<>() {
             @Override
@@ -213,6 +213,7 @@ public class ChordClient {
                 FileMetadata.newBuilder()
                         .setFileNameWithType(fileMetadata.getFileNameWithType())
                         .setContentLength(fileMetadata.getContentLength())
+                        .setAuthor(fileMetadata.getAuthor())
                         .build()
                         .toByteArray());
 

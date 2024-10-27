@@ -8,6 +8,7 @@ import io.grpc.Metadata;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
@@ -24,10 +25,12 @@ public class FileDownloadService extends BaseFileService {
     public String downloadFile(String fileName) {
         StringBuilder response = new StringBuilder();
         CountDownLatch countDownLatch = new CountDownLatch(1);
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
 
         Metadata metadata = createMetadata(fileName);
         FileDownloadRequest request = FileDownloadRequest.newBuilder()
                 .setFileName(fileName)
+                .setRequester(username)
                 .build();
 
         DiskFileStorage diskFileStorage = new DiskFileStorage();
