@@ -55,7 +55,7 @@ public class FileOperationService extends BaseFileService {
         List<NodeInfo> nodeInfos = bootstrapService.getAllServers();
         List<String> statuses = new ArrayList<>();
         for (NodeInfo nodeInfo : nodeInfos) {
-            createChannel(nodeInfo.getIp(), nodeInfo.getPort());
+            createChannel();
             try {
                 statuses.add(blockingClient.healthCheck(Empty.newBuilder().build()).getStatus());
             } catch (Exception e) {

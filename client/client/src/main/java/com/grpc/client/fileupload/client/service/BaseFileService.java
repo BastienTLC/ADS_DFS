@@ -12,6 +12,7 @@ import io.grpc.Metadata;
 import io.grpc.stub.MetadataUtils;
 import net.devh.boot.grpc.client.inject.GrpcClient;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import io.grpc.ManagedChannel;
@@ -25,6 +26,12 @@ public abstract class BaseFileService {
 
     @Autowired
     private BootstrapService bootstrapService;
+
+    @Value("${defaultPort}")
+    private String defaultPort;
+
+    @Value("${defaultIp}")
+    private String defaultIp;
 
     // This is the client stub for the FileUploadService used to upload and download files
     protected ChordGrpc.ChordStub client;
@@ -49,11 +56,16 @@ public abstract class BaseFileService {
         setClient(nodeInfo);
     }
 
+    protected boolean bootsrapIsAvailable() {
+        return bootstrapService.healthCheck();
+    }
+
 
     // Set the client and blocking client channel to a server with the given IP and port
-    protected void createChannel(String ip, String port) {
-        ManagedChannel channel = grpcChannelFactory.getChannel(ip, Integer.parseInt(port));
+    protected void createChannel() {
+        ManagedChannel channel = grpcChannelFactory.getChannel(defaultIp, Integer.parseInt(defaultPort));
         client = ChordGrpc.newStub(channel);
+        System.out.println(defaultPort);
         blockingClient = FileOperationsServiceGrpc.newBlockingStub(channel);
     }
 

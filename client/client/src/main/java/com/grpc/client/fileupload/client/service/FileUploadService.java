@@ -87,7 +87,12 @@ public class FileUploadService extends BaseFileService {
         // Create metadata with the size of the encrypted data
         Metadata metadata = createMetadata(fileName, encryptedData.length, username);
 
-        super.createChannelFromBootstrap();
+
+        if (super.bootsrapIsAvailable()){
+            createChannelFromBootstrap();
+        }else {
+            createChannel();
+        }
 
 
 

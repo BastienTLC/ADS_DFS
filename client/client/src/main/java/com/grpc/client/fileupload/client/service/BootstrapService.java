@@ -59,4 +59,15 @@ public class BootstrapService {
             return null;
         }
     }
+
+    public boolean healthCheck() {
+        String url = bootstrapUrl + "/healthCheck";
+        try {
+            String response = restTemplate.getForObject(url, String.class);
+            return "OK".equals(response);
+        } catch (Exception e) {
+            System.err.println("Failed to check health of bootstrap: " + e.getMessage());
+            return false;
+        }
+    }
 }
