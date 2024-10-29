@@ -37,6 +37,6 @@
             }
 
             // If the file exists download
-            return this.fileDownloadService.downloadFile(filename);
+            return this.fileDownloadService.downloadFile(filename, username);
         }
     }
