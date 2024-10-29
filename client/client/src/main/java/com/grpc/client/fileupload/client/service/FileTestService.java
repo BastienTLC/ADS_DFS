@@ -1,61 +1,63 @@
 package com.grpc.client.fileupload.client.service;
 
-import com.devProblems.Fileupload.FileDownloadRequest;
-import com.devProblems.Fileupload.FileTesting;
+import com.grpc.client.fileupload.client.Factory.FileFactory;
 import io.grpc.Metadata;
-import io.grpc.stub.MetadataUtils;
-import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
-
 
 @Slf4j
 @Service
 public class FileTestService extends BaseFileService {
 
-    // this function simply sends a string, receives a string back and returns it to Postman
-    // we don't do anything with the metadata that is sent alongside the main request here,
-    // which otherwise is used to verify that data was sent correctly
-    public String testMethodCall(String fileName) {
-        StringBuilder response = new StringBuilder();
-        CountDownLatch countDownLatch = new CountDownLatch(1);
+    @Autowired
+    private FileUploadService fileUploadService;
 
-        createChannelFromBootstrap(); // not fully implemented yet
+    @Autowired
+    private FileDownloadService fileDownloadService;
 
-        Metadata metadata = createMetadata(fileName);
-        FileDownloadRequest request = FileDownloadRequest.newBuilder()
-                .setFileName(fileName)
-                .build();
+    /**
+     * Test method that generates n random binary files of a specified size, uploads them,
+     * and then downloads them to verify functionality.
+     *
+     * @param numberOfFiles The number of files to create, upload, and download
+     * @param fileSize      The size of each file in bytes
+     * @return String result of file upload and download test
+     */
 
-        /*client.withInterceptors(MetadataUtils.newAttachHeadersInterceptor(metadata))
-                .testMethod(request, new StreamObserver<FileTesting>() {
-                    @Override
-                    public void onNext(FileTesting fileTesting) {
-                        response.append(fileTesting.getText());
-                    }
+    public String testFileUploadAndDownload(int numberOfFiles, int fileSize) {
+        StringBuilder result = new StringBuilder();
 
-                    @Override
-                    public void onError(Throwable throwable) {
-                        throwable.printStackTrace();
-                        response.append("Error occurred while calling testMethod.");
-                        countDownLatch.countDown();
-                    }
+        // Generate random binary files
+        List<MultipartFile> files = FileFactory.generateBinaryFiles(numberOfFiles, fileSize);
 
-                    @Override
-                    public void onCompleted() {
-                        countDownLatch.countDown();
-                    }
-                });
+        // Upload each file
+        files.forEach(file -> {
+            try {
+                fileUploadService.uploadFile(file, "test");
+                result.append("Uploaded file: ").append(file.getOriginalFilename()).append("\n");
+            } catch (Exception e) {
+                log.error("Error uploading file: " + file.getOriginalFilename(), e);
+                result.append("Failed to upload file: ").append(file.getOriginalFilename()).append("\n");
+            }
+        });
 
-        try {
-            countDownLatch.await();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-            return "Failed to get the response from the server.";
-        }*/
+        // Download each file
+        files.forEach(file -> {
+            String filename = file.getOriginalFilename();
+            try {
+                String string = fileDownloadService.downloadFile(filename, "test");
+                result.append("Downloaded file: ").append(filename).append("\n");
+            } catch (Exception e) {
+                log.error("Error downloading file: " + filename, e);
+                result.append("Failed to download file: ").append(filename).append("\n");
+            }
+        });
 
-        return response.toString();
+        return result.toString();
     }
 }

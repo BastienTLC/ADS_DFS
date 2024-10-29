@@ -3,10 +3,7 @@ package com.grpc.client.fileupload.client.controller;
 
 import com.grpc.client.fileupload.client.service.FileTestService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @Slf4j
 @RestController
@@ -19,8 +16,8 @@ public class FileTestController {
         this.fileTestService = fileTestService;
     }
 
-    @PostMapping("/string")
-    public String testSendFile(@RequestParam("file") String filename)  {
-        return this.fileTestService.testMethodCall(filename);
+    @PostMapping("/upload-download")
+    public String testUploadDownload(@RequestParam("number") int numberOfFiles, @RequestParam("size") int fileSize, @RequestParam("nt") int numberOfTry) {
+        return this.fileTestService.testFileUploadAndDownload(numberOfFiles, fileSize, numberOfTry);
     }
 }

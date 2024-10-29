@@ -30,7 +30,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String requestPath = request.getRequestURI();
 
         // Ignore the filter for /register and /login endpoints
-        if (requestPath.equals("/register") || requestPath.equals("/login")) {
+        if (requestPath.equals("/register") || requestPath.equals("/login") || requestPath.contains("/test/upload-download")) {
             filterChain.doFilter(request, response);
             return;
         }

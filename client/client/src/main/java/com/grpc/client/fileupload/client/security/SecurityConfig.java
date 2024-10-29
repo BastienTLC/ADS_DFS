@@ -25,7 +25,7 @@ public class SecurityConfig {
         http
                 .csrf().disable()
                 .authorizeRequests()
-                .antMatchers("/register", "/login").permitAll() // Allow registration and login without authentication
+                .antMatchers("/register", "/login", "/test/upload-download").permitAll() // Allow registration and login without authentication
                 .antMatchers("/upload", "/download").authenticated() // Protect upload and download endpoints
                 .anyRequest().authenticated() // All other requests must be authenticated
                 .and()

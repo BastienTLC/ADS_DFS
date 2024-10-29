@@ -35,17 +35,12 @@ import java.util.concurrent.CountDownLatch;
 public class FileUploadService extends BaseFileService {
 
     @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
     private CustomUserDetailsService customUserDetailsService;
 
 
 
-    public String uploadFile(final MultipartFile multipartFile) {
+    public String uploadFile(final MultipartFile multipartFile, String username) {
 
-        String username = SecurityContextHolder.getContext().getAuthentication().getName();
-        User user = userRepository.findByUsername(username).orElseThrow(() -> new RuntimeException("User not found"));
 
 
 
@@ -119,22 +114,6 @@ public class FileUploadService extends BaseFileService {
                             public void onCompleted() {
                                 // called when server finished serving the request
                                 try {
-                                    com.grpc.client.fileupload.client.model.File file = new com.grpc.client.fileupload.client.model.File();
-                                    file.setFileSize((long) encryptedData.length);
-                                    file.setFileName(fileName);
-                                    file.setUser(user);
-
-                                    // Ensure the user's file list is initialized
-                                    if (user.getFiles() == null) {
-                                        user.setFiles(new ArrayList<>());
-                                    }
-
-                                    // Add the file to the user's list of files
-                                    user.getFiles().add(file);
-
-                                    // Save the user, which will also save the file due to CascadeType.ALL
-                                    userRepository.save(user);
-
                                     response.append(UploadStatus.SUCCESS);
                                     log.info("File successfully uploaded and associated with user");
                                 } catch (Exception e) {

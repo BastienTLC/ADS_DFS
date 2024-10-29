@@ -22,10 +22,9 @@ import java.util.concurrent.CountDownLatch;
 // Otherwise it seems to work
 public class FileDownloadService extends BaseFileService {
 
-    public String downloadFile(String fileName) {
+    public String downloadFile(String fileName, String username) {
         StringBuilder response = new StringBuilder();
         CountDownLatch countDownLatch = new CountDownLatch(1);
-        String username = SecurityContextHolder.getContext().getAuthentication().getName();
 
         Metadata metadata = createMetadata(fileName);
         FileDownloadRequest request = FileDownloadRequest.newBuilder()
