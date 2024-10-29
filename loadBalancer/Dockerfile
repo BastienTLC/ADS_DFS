@@ -29,4 +29,4 @@ COPY --from=build /app/target/*.jar /app/loadBalancer.jar
 EXPOSE 8085
 
 # Specify the entry point to run the application
-ENTRYPOINT ["java", "-jar", "/app/loadBalancer.jar"]
+ENTRYPOINT ["java", "-jar", "/app/loadBalancer.jar", "${BALACING_STRAEGY}"]

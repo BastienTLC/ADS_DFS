@@ -12,6 +12,57 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    depends_on:
+      - db
+      - loadbalancer
+    expose:
+      - 8080
+    environment:
+      BOOTSTRAP_URL: http://loadbalancer:8085/balancer  # Connects to loadbalancer in app_network
+      DEFAULT_IP: host.docker.internal  # Placeholder, replaced in /etc/hosts
+      DEFAULT_PORT: "8000"
+      DB_URL: jdbc:postgresql://db:5432/db_name  # Dockerized database URL
+      DB_USERNAME: db_user
+      DB_PASSWORD: db_password
+    networks:
+      - app_network
+    extra_hosts:
+      - "host.docker.internal:192.168.8.187"  # Replace with the actual IP of the host machine
+
+  loadbalancer:
+    build:
+      context: ./loadBalancer  
+      dockerfile: Dockerfile
+    expose:
+      - 8085
+    environment:
+      BALACING_STRAEGY: roundRobin #random
+    networks:
+      - app_network
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx_load_balancer
+    ports:
+      - "80:80"
+    depends_on:
+      - client
+      - loadbalancer
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
 
 volumes:
   postgres_data:
