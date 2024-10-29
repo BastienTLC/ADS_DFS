@@ -11,17 +11,13 @@ import java.util.Base64;
 
 public class CrypteUtil {
     private static final String KEY_FILE_PATH = "key.txt";
+    private static final String key = "aKZ8PKeLwTkUZqgg1s77hEVCGwetGiDJNP+5muWT/2Y=";
 
     // Load AES key from file
     public static SecretKey LoadSecretKey() {
-        try {
-            String encodedKey = new String(Files.readAllBytes(Paths.get(KEY_FILE_PATH))).trim();
-            byte[] decodedKey = Base64.getDecoder().decode(encodedKey);
-            return new SecretKeySpec(decodedKey, "AES");
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
+        String encodedKey = key;
+        byte[] decodedKey = Base64.getDecoder().decode(encodedKey);
+        return new SecretKeySpec(decodedKey, "AES");
     }
 
     // Encrypt data using AES

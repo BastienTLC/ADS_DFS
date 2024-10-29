@@ -7,15 +7,17 @@ grpc:
       address: "static://localhost:9090"
       negotiationType: plaintext
 bootstrap:
-  url: http://127.0.0.1:8085
+  url: ${BOOTSTRAP_URL:http://localhost:8085}
+
 
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/db_name
-    username: db_user
-    password: db_password
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/db_name}
+    username: ${DB_USERNAME:db_user}
+    password: ${DB_PASSWORD:db_password}
     driver-class-name: org.postgresql.Driver
+
 
   jpa:
     hibernate:
@@ -24,6 +26,10 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+server:
+  servlet:
+    context-path: /client
 
 
 jwt:

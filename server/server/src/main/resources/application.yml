@@ -1,0 +1,6 @@
+loadBalancer:
+  url: http://localhost/balancer
+
+node:
+  #ip: localhost # for local development
+  ip: host.docker.internal # for docker

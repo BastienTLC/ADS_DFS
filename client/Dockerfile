@@ -30,9 +30,14 @@ WORKDIR /app
 # Copy the built JAR file from the previous stage
 COPY --from=build /app/client/target/*.jar /app/client.jar
 
+#Coppy key.txt
+COPY --from=build /app/key.txt /app/key.txt
+#create folder output
+RUN mkdir /app/downloads
+
 # Expose port 8080 for the client service
 EXPOSE 8080
 
 # Specify the entry point to run the application
-ENTRYPOINT ["java", "-jar", "/app/client.jar"]
+ENTRYPOINT ["java", "-jar", "/app/client.jar", "--defaultIp=${DEFAULT_IP}", "--defaultPort=${DEFAULT_PORT}"]
 

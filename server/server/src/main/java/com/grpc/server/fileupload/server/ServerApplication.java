@@ -27,6 +27,9 @@ public class ServerApplication implements CommandLineRunner {
 	@Autowired
 	private ApplicationArguments appArgs;
 
+	@Autowired
+	private LoadBalancer loadBalancer;
+
 	public static void main(String[] args) {
 		SpringApplication app = new SpringApplication(ServerApplication.class);
 		app.setWebApplicationType(WebApplicationType.NONE); // Disable embedded HTTP server
@@ -71,7 +74,6 @@ public class ServerApplication implements CommandLineRunner {
 
 		// Determine the Chord node's port
 		int chordPort = findAvailablePort(8000, 9000);
-		LoadBalancer loadBalancer = new LoadBalancer("http://localhost:8085");
 
 		// Create the ChordNode
 		ChordNode node = new ChordNode(host, chordPort, multiThreadingEnabled, loadBalancer);
