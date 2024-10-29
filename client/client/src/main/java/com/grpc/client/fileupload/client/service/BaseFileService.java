@@ -36,12 +36,12 @@ public abstract class BaseFileService {
     // This is the client stub for the FileUploadService used to upload and download files
     protected ChordGrpc.ChordStub client;
     // This is the blocking client stub for the FileOperationsService used to list files and get file metadata
-    protected FileOperationsServiceGrpc.FileOperationsServiceBlockingStub blockingClient;
+    protected ChordGrpc.ChordBlockingStub blockingClient;
 
     // This method is used to create or changed channel to the server with the given IP and port
     protected void setBlockingClient(NodeInfo nodeInfo) {
         ManagedChannel channel = grpcChannelFactory.getChannel(nodeInfo.getIp(), Integer.parseInt(nodeInfo.getPort()));
-        blockingClient = FileOperationsServiceGrpc.newBlockingStub(channel);
+        blockingClient = ChordGrpc.newBlockingStub(channel);
     }
     // same but for the client
     protected void setClient(NodeInfo nodeInfo) {
@@ -66,7 +66,7 @@ public abstract class BaseFileService {
         ManagedChannel channel = grpcChannelFactory.getChannel(defaultIp, Integer.parseInt(defaultPort));
         client = ChordGrpc.newStub(channel);
         System.out.println(defaultPort);
-        blockingClient = FileOperationsServiceGrpc.newBlockingStub(channel);
+        blockingClient = ChordGrpc.newBlockingStub(channel);
     }
 
     protected Metadata createMetadata(String fileName, int fileSize, String author) {

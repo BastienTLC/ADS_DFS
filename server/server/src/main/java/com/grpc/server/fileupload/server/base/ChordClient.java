@@ -198,6 +198,24 @@ public class ChordClient {
 
     }
 
+    public void deleteFile(String key, String requester, StreamObserver<com.google.protobuf.Empty> originalResponseObserver) {
+        ChordGrpc.ChordBlockingStub stub = ChordGrpc.newBlockingStub(channel);
+
+        FileDownloadRequest request = FileDownloadRequest.newBuilder()
+                .setFileName(key)
+                .setRequester(requester)
+                .build();
+
+        try {
+            stub.deleteFile(request);
+            originalResponseObserver.onNext(Empty.getDefaultInstance());
+            originalResponseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            System.err.println("deleteFile failed");
+            originalResponseObserver.onError(e);
+        }
+    }
+
 
     public void storeFile(String key, byte[] fileContent) {
         // Create the stub for FileUploadService

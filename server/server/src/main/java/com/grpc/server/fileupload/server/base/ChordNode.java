@@ -400,6 +400,26 @@ public class ChordNode {
         // return message;
     }
 
+    public void deleteFileFromChord(String key, String requester, StreamObserver<com.google.protobuf.Empty> originalResponseObserver) {
+        //async not implemented for delete
+        String keyId = hashNode(key);
+
+        // finding the responsible node
+
+        // currently trying to understand why this returns IP and port of current node and not the one of the range we seek
+        System.out.println("Finding responseNode of the keyId: " + keyId);
+        NodeHeader responsibleNode = findSuccessor(keyId);
+
+        ChordClient responsibleNodeClient = new ChordClient(responsibleNode.getIp(), Integer.parseInt(responsibleNode.getPort()));
+        System.out.println("deleteFileFromChord(): responsibleNode address is " + responsibleNode.getIp() + ":" + responsibleNode.getPort());
+
+        responsibleNodeClient.deleteFile(key, requester, originalResponseObserver);
+
+
+        responsibleNodeClient.shutdown();
+        // return message;
+    }
+
 
 
 

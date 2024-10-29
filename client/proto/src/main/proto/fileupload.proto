@@ -182,9 +182,11 @@ service Chord {
   rpc getNodeInfo (GetNodeInfoRequest) returns (GetNodeInfoResponse);
   rpc storeFile(stream FileUploadRequest) returns (FileUploadResponse);
   rpc retrieveFile(FileDownloadRequest) returns (stream FileDownloadResponse);
+  rpc deleteFile(FileDownloadRequest) returns (google.protobuf.Empty);
 
   // Stream-based File management in Chord
   rpc storeFileInChord (stream FileUploadRequest) returns (FileUploadResponse);
   rpc retrieveFileFromChord (FileDownloadRequest) returns (stream FileDownloadResponse);
+  rpc deleteFileFromChord (FileDownloadRequest) returns (google.protobuf.Empty);
   rpc getChordNodeInfo (google.protobuf.Empty) returns (Node);
 }

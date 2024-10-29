@@ -5,6 +5,7 @@ import com.devProblems.Fileupload.FileDownloadRequest;
 import com.grpc.client.fileupload.client.model.FileMetadataModel;
 import com.grpc.client.fileupload.client.service.FileOperationService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,28 +21,10 @@ public class FileOperationController {
         this.fileOperationService = fileOperationService;
     }
 
-    //endpoint to list all files
-    @GetMapping("/list")
-    public List<FileMetadataModel> listFiles() {
-        return this.fileOperationService.listFiles();
+    @DeleteMapping("/{filename}/delete")
+    public String deleteFile(@PathVariable String filename) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        return this.fileOperationService.deleteFile(filename, username);
     }
 
-    @GetMapping("/health")
-    public String health() {
-        return this.fileOperationService.health();
-    }
-
-    @GetMapping("/healths")
-    public List<String> healths() {
-        return this.fileOperationService.healths();
-    }
-
-    //endpoint to get metadata of a specific file
-    @GetMapping("/{fileName}/metadata")
-    public FileMetadataModel getFileMetadata(@PathVariable("fileName") String fileName) {
-        FileDownloadRequest request = FileDownloadRequest.newBuilder()
-                .setFileName(fileName)
-                .build();
-        return new FileMetadataModel(this.fileOperationService.getFileMetadata(request));
-    }
 }

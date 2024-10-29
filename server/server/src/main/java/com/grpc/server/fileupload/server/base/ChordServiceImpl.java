@@ -302,6 +302,35 @@ public class ChordServiceImpl extends ChordImplBase {
 //        responseObserver.onCompleted();
 //    }
 
+    public void deleteFile(FileDownloadRequest request, StreamObserver<com.google.protobuf.Empty> responseObserver) {
+        String filename = request.getFileName();
+        String requester = request.getRequester();
+        String filePath = "output/" + this.chordNode.getNodeId() + "/" + requester + "/" + filename;
+        java.io.File file = new java.io.File(filePath);
+        java.io.File parentDir = file.getParentFile();
+
+        if (!parentDir.exists()) {
+            System.out.println(String.format("Directory not found: %s", parentDir.getPath()));
+            responseObserver.onError(Status.PERMISSION_DENIED.withDescription("Directory not found").asRuntimeException());
+            return;
+        }
+
+        if (!file.exists() || !file.isFile()) {
+            System.out.println(String.format("File not found: %s", filename));
+            responseObserver.onError(Status.NOT_FOUND.withDescription("File not found").asRuntimeException());
+            return;
+        }
+
+        if (!file.delete()) {
+            System.out.println(String.format("Failed to delete file: %s", filename));
+            responseObserver.onError(Status.INTERNAL.withDescription("Failed to delete file").asRuntimeException());
+            return;
+        }
+
+        responseObserver.onNext(com.google.protobuf.Empty.getDefaultInstance());
+        responseObserver.onCompleted();
+    }
+
     @Override
     public StreamObserver<FileUploadRequest> storeFileInChord(StreamObserver<FileUploadResponse> responseObserver) {
         FileMetadata fileMetadata = Constants.fileMetaContext.get(); // this is used at the end of the function to verify meta data
@@ -375,6 +404,12 @@ public class ChordServiceImpl extends ChordImplBase {
         String filename = request.getFileName();
         String requester = request.getRequester();
         chordNode.retrieveMessageFromChord(filename, requester, responseObserver);
+    }
+
+    public void deleteFileFromChord(FileDownloadRequest request, StreamObserver<com.google.protobuf.Empty> responseObserver) {
+        String filename = request.getFileName();
+        String requester = request.getRequester();
+        chordNode.deleteFileFromChord(filename, requester, responseObserver);
     }
 
     /*@Override
