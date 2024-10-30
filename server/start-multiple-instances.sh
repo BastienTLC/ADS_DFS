@@ -26,7 +26,7 @@ sleep 5
 for ((i=2; i<=NUM_NODES; i++)); do
   echo "Starting instance $i ..."
   java -jar $JAR_PATH --mValue=$M_VALUE &
-  sleep 1
+  sleep 5
 done
 
 # Wait for all background processes to finish

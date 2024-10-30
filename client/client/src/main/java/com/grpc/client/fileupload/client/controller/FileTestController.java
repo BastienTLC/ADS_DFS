@@ -1,9 +1,11 @@
 package com.grpc.client.fileupload.client.controller;
 
 import com.grpc.client.fileupload.client.service.FileTestService;
+import com.grpc.client.fileupload.client.utils.CsvUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -33,10 +35,10 @@ public class FileTestController {
             @RequestParam("increment") int increment,
             @RequestParam("nbFile") int nbFile,
             @RequestParam("nt") int nt,
-            @RequestParam("nbNode") int nbNode) {
+            @RequestParam("nbNode") int nbNode) throws IOException {
 
         List<Map<String, Object>> allMetrics = fileTestService.testWithFileSizeIncrement(startSize, endSize, increment, nbFile, nt, nbNode);
-
+        CsvUtil.writeResultsToCsv(allMetrics);
 
         return allMetrics;
     }
@@ -51,10 +53,10 @@ public class FileTestController {
             @RequestParam("increment") int increment,
             @RequestParam("fileSize") int fileSize,
             @RequestParam("nt") int nt,
-            @RequestParam("nbNode") int nbNode) {
+            @RequestParam("nbNode") int nbNode) throws IOException {
 
         List<Map<String, Object>> allMetrics = fileTestService.testWithFileCountIncrement(startCount, endCount, increment, fileSize, nt, nbNode);
-
+        CsvUtil.writeResultsToCsv(allMetrics);
         return allMetrics;
     }
 }
