@@ -43,6 +43,7 @@ public class ServerApplication implements CommandLineRunner {
 		String joinIp = null;
 		int joinPort = -1;
 		boolean multiThreadingEnabled = false;
+		int m = 6; // default value
 
 		// Parse command-line arguments
 		if (appArgs.containsOption("bootstrap")) {
@@ -62,6 +63,14 @@ public class ServerApplication implements CommandLineRunner {
 		if (appArgs.containsOption("multiThreading")) {
 			multiThreadingEnabled = true;
 		}
+		if (appArgs.containsOption("mValue")) {
+			try {
+				m = Integer.parseInt(appArgs.getOptionValues("mValue").get(0));
+			} catch (NumberFormatException e) {
+				System.err.println("Invalid m value: " + appArgs.getOptionValues("mValue").get(0));
+				System.exit(1);
+			}
+		}
 
 		// Determine host address
 		String host;
@@ -76,7 +85,7 @@ public class ServerApplication implements CommandLineRunner {
 		int chordPort = findAvailablePort(8000, 9000);
 
 		// Create the ChordNode
-		ChordNode node = new ChordNode(host, chordPort, multiThreadingEnabled, loadBalancer);
+		ChordNode node = new ChordNode(host, chordPort, multiThreadingEnabled, loadBalancer, m);
 		ScheduledTask scheduledTask = new ScheduledTask(node);
 
 		// Start the gRPC server

@@ -21,16 +21,17 @@ public class ChordNode {
     private NodeHeader successor; // Successor of this node
     private NodeHeader predecessor; // Predecessor of this node
     private final FingerTable fingerTable; // Finger table for routing
-    private final int m = 5; // Number of bits for the identifier space
+    private final int m; // Number of bits for the identifier space
     private NodeHeader currentHeader;
     private FileStore fileStore;
     private final boolean multiThreadingEnabled;
     private final ExecutorService executorService;
     private final LoadBalancer loadBalancer;
 
-    public ChordNode(String ip, int port, boolean multiThreadingEnabled, LoadBalancer loadBalancer) {
+    public ChordNode(String ip, int port, boolean multiThreadingEnabled, LoadBalancer loadBalancer, int m) {
         this.ip = ip;
         this.port = port;
+        this.m = m;
         this.multiThreadingEnabled = multiThreadingEnabled;
         if (this.multiThreadingEnabled) {
             this.executorService = Executors.newCachedThreadPool();
