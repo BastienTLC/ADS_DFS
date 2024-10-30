@@ -17,6 +17,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 
+import java.util.concurrent.CompletableFuture;
+
 import static com.devProblems.ChordGrpc.newBlockingStub;
 
 public class ChordClient {
@@ -145,11 +147,12 @@ public class ChordClient {
 
     }
 
-    public void retrieveFile(String key, String requester, StreamObserver<Fileupload.FileDownloadResponse> originalResponseObserver) {
+    public CompletableFuture<Boolean> retrieveFile(String key, String requester, StreamObserver<Fileupload.FileDownloadResponse> originalResponseObserver) {
         System.out.println("retrieveFile called");
 
         // not verifying meta data right now
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream(); // data stored in RAM
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
 
         ChordGrpc.ChordStub stub = ChordGrpc.newStub(channel);
 
@@ -175,6 +178,7 @@ public class ChordClient {
             public void onError(Throwable t) {
                 System.err.println("Failed to retrieve file: " + t.getMessage());
                 t.printStackTrace();
+                future.complete(false);
             }
 
             @Override
@@ -191,10 +195,12 @@ public class ChordClient {
 
                 originalResponseObserver.onNext(finalResponse);
                 originalResponseObserver.onCompleted();
+                future.complete(true);
             }
         };
 
         stub.retrieveFile(request, responseObserver);
+        return future;
 
     }
 

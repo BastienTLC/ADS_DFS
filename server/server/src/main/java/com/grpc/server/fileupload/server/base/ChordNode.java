@@ -11,6 +11,7 @@ import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -384,18 +385,31 @@ public class ChordNode {
         //async not implemented for retrieve
         String keyId = hashNode(key);
 
-        // finding the responsible node
 
-        // currently trying to understand why this returns IP and port of current node and not the one of the range we seek
-        System.out.println("Finding responseNode of the keyId: " + keyId);
-        NodeHeader responsibleNode = findSuccessor(keyId);
+        // below is used for going through replica nodes if value is not found
+        TreeBasedReplication treeReplication = new TreeBasedReplication(m);
+        Map<Integer, List<Integer>> replicaTree = treeReplication.generateReplicaTree(Integer.parseInt(keyId), 1);
+        List<Integer> leafNodes = treeReplication.getLeafNodes(replicaTree);
+        boolean fileRetrieved = false;
 
-        ChordClient responsibleNodeClient = new ChordClient(responsibleNode.getIp(), Integer.parseInt(responsibleNode.getPort()));
-        System.out.println("retrieveMessageFromChord(): responsibleNode address is " + responsibleNode.getIp() + ":" + responsibleNode.getPort());
+        ChordClient responsibleNodeClient = null;
+        for (Integer replicaKey : leafNodes) {
+            NodeHeader responsibleNode = findSuccessor(replicaKey.toString());
+            responsibleNodeClient = new ChordClient(responsibleNode.getIp(), Integer.parseInt(responsibleNode.getPort()));
 
-        responsibleNodeClient.retrieveFile(key, requester, originalResponseObserver);
+            System.out.println("Attempting to retrieve file from replica: " + responsibleNode.getIp() + ":" + responsibleNode.getPort());
 
-        // Message message = Wrapper.wrapGrpcMessageToMessage(responsibleNodeClient.retrieveMessage(key));
+            CompletableFuture<Boolean> retrievalResult = responsibleNodeClient.retrieveFile(key, requester, originalResponseObserver);
+
+            if (retrievalResult.join()) {
+                fileRetrieved = true;
+                break;
+            }
+        }
+
+        if (!fileRetrieved) {
+            System.out.println("File not found in any replicas.");
+        }
 
         responsibleNodeClient.shutdown();
         // return message;
