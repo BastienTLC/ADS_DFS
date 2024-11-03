@@ -1,14 +1,7 @@
 package com.grpc.client.fileupload.client.service;
 import com.devProblems.Fileupload.*;
-import com.devProblems.ChordGrpc.*;
-import com.grpc.client.fileupload.client.model.FileMetadataModel;
-import com.google.protobuf.Empty;
-import com.grpc.client.fileupload.client.utils.NodeInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-
-import java.util.ArrayList;
-import java.util.List;
 
 @Slf4j
 @Service
@@ -24,7 +17,7 @@ public class FileOperationService extends BaseFileService {
 
 
     public String deleteFile(String filename, String username) {
-        if (super.bootsrapIsAvailable()){
+        if (super.bootstrapIsAvailable()){
             createChannelFromBootstrap();
         }else {
             createChannel();

@@ -2,21 +2,12 @@ package com.grpc.client.fileupload.client.service;
 
 import com.devProblems.ChordGrpc;
 import com.devProblems.Fileupload.FileMetadata;
-import com.devProblems.FileOperationsServiceGrpc;
 import com.grpc.client.fileupload.client.Factory.GrpcChannelFactory;
 import com.shared.proto.Constants;
-import com.devProblems.FileUploadServiceGrpc;
 import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
 import io.grpc.Metadata;
-import io.grpc.stub.MetadataUtils;
-import net.devh.boot.grpc.client.inject.GrpcClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
 import com.grpc.client.fileupload.client.utils.NodeInfo;
 
 public abstract class BaseFileService {
@@ -56,7 +47,7 @@ public abstract class BaseFileService {
         setClient(nodeInfo);
     }
 
-    protected boolean bootsrapIsAvailable() {
+    protected boolean bootstrapIsAvailable() {
         return bootstrapService.healthCheck();
     }
 

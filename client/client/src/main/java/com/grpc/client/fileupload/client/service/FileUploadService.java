@@ -3,30 +3,18 @@ package com.grpc.client.fileupload.client.service;
 
 import com.devProblems.Fileupload.*;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.Empty;
-import com.grpc.client.fileupload.client.model.User;
-import com.grpc.client.fileupload.client.repository.UserRepository;
 import com.grpc.client.fileupload.client.utils.CrypteUtil;
-import com.grpc.client.fileupload.client.utils.NodeInfo;
 import io.grpc.Metadata;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.crypto.SecretKey;
 import java.io.IOException;
 import java.io.InputStream;
-import java.security.PrivateKey;
-import java.security.PublicKey;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
 import java.util.concurrent.CountDownLatch;
 
 @Slf4j
@@ -40,17 +28,11 @@ public class FileUploadService extends BaseFileService {
 
 
     public String uploadFile(final MultipartFile multipartFile, String username) {
-
-
-
-
         String fileName; // provided by client
         int fileSize;
         InputStream inputStream;
         byte[] fileData;
         fileName = multipartFile.getOriginalFilename();
-
-        System.out.println("test!");
 
         try {;
             fileData = multipartFile.getBytes();
@@ -83,7 +65,7 @@ public class FileUploadService extends BaseFileService {
         Metadata metadata = createMetadata(fileName, encryptedData.length, username);
 
 
-        if (super.bootsrapIsAvailable()){
+        if (super.bootstrapIsAvailable()){
             createChannelFromBootstrap();
         }else {
             createChannel();

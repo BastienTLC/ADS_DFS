@@ -5,10 +5,13 @@
     import com.grpc.client.fileupload.client.service.FileDownloadService;
     import lombok.extern.slf4j.Slf4j;
     import org.springframework.beans.factory.annotation.Autowired;
+    import org.springframework.http.*;
     import org.springframework.security.core.context.SecurityContextHolder;
     import org.springframework.web.bind.annotation.PostMapping;
     import org.springframework.web.bind.annotation.RequestParam;
     import org.springframework.web.bind.annotation.RestController;
+
+    import java.io.ByteArrayOutputStream;
 
     @Slf4j
     @RestController
@@ -24,19 +27,30 @@
         }
 
         @PostMapping("/download")
-        public String downloadFile(@RequestParam("file") String filename) {
+        public ResponseEntity<byte[]> downloadFile(@RequestParam("file") String filename) {
             String username = SecurityContextHolder.getContext().getAuthentication().getName();
             User user = userRepository.findByUsername(username).orElseThrow(() -> new RuntimeException("User not found"));
 
-            // Check if the filename exists in the users list of files
             boolean fileExists = user.getFiles().stream()
                     .anyMatch(file -> file.getFileName().equals(filename));
 
             if (!fileExists) {
-                return "Error: The specified file does not belong to the user.";
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Error: The specified file does not belong to the user.".getBytes());
             }
 
-            // If the file exists download
-            return this.fileDownloadService.downloadFile(filename, username);
+            ByteArrayOutputStream outputStream = fileDownloadService.downloadFile(filename, username);
+
+            if (outputStream == null) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error occurred while downloading the file.".getBytes());
+            }
+
+            byte[] fileData = outputStream.toByteArray();
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+            headers.setContentDisposition(ContentDisposition.attachment().filename(filename).build());
+
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(fileData);
         }
     }

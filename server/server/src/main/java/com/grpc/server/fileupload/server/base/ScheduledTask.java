@@ -16,12 +16,12 @@ public class ScheduledTask {
     public void startScheduledTask() {
         scheduler.scheduleAtFixedRate(() -> {
             try {
-                node.stabilize();
-                node.fixFingers();
+                 node.stabilize();
+                 node.fixFingers();
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        }, 0, 20, TimeUnit.MILLISECONDS);
+        }, 0, 100, TimeUnit.MILLISECONDS);
     }
 
     public void stopScheduledTask() {
