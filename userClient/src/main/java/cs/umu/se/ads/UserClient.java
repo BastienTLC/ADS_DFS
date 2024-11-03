@@ -45,8 +45,18 @@ public class UserClient {
             System.out.println("3. Upload File");
             System.out.println("4. Download File");
             System.out.println("5. Exit");
-            int choice = scanner.nextInt();
-            scanner.nextLine();
+
+
+            int choice = -1;
+
+            if (scanner.hasNextInt()) {
+                choice = scanner.nextInt();
+                scanner.nextLine();
+            } else {
+                System.out.println("Invalid input. Please enter a number.");
+                scanner.nextLine();
+                continue;
+            }
 
             try {
                 switch (choice) {
