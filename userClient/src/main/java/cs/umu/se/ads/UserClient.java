@@ -11,34 +11,37 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Scanner;
 
+import org.apache.hc.client5.http.HttpResponseException;
 import org.apache.hc.client5.http.classic.methods.HttpPost;
-import org.apache.hc.client5.http.impl.classic.CloseableHttpResponse;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.core5.http.HttpEntity;
-import org.apache.hc.core5.http.ParseException;
+import org.apache.hc.core5.http.io.HttpClientResponseHandler;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.client5.http.entity.mime.MultipartEntityBuilder;
 import org.apache.hc.client5.http.entity.mime.HttpMultipartMode;
 
 import org.json.JSONObject;
 
-// This program requires a Downloads/ directory, where files will be placed.
+// This program requires a Downloads/ directory, where files will be downloaded.
 // Files for uploading will be taken from current directory.
 // In order to start uploading/downloading files, login and the bearer
 // token will be used automatically.
-// Not sure if tests should be measured using this UserClient or not
+
+// In rare cases some specific usernames that have been registered before
+// will not let us login. This occurs with testuser:testuser for me.
+// Might need to check that multiple UserClients can use this program at the same time.
 
 
 public class UserClient {
 
-    // this bearer token is replaced automatically upon logging in successfully
-    private static String BEARER_TOKEN = "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0dXNlcjIiLCJpYXQiOjE3MzA2MjU3MDIsImV4cCI6MTczMDY2MTcwMn0.W43sAW8IYGf3koThvlnnhqgYv6opfX4ln1x6RR3PEAA";
+    private static String BEARER_TOKEN = null;
     private static final HttpClient client = HttpClient.newHttpClient();
     private static final Scanner scanner = new Scanner(System.in);
 
     public static void main(String[] args) {
         while (true) {
+            System.out.println();
             System.out.println("Choose an option:");
             System.out.println("1. Register");
             System.out.println("2. Login");
@@ -95,7 +98,8 @@ public class UserClient {
         if (response.statusCode() == 200) {
             System.out.println("Registration successful!");
         } else {
-            System.out.println("Registration failed: " + response.body());
+            // System.out.println("Registration failed: " + response.body());
+            System.out.println("Registration failed!");
         }
     }
 
@@ -124,15 +128,21 @@ public class UserClient {
 
             // this will update BEARER_TOKEN with the new token
             BEARER_TOKEN = "Bearer " + token;
-            System.out.println("Updated BEARER_TOKEN: " + BEARER_TOKEN);
+            // System.out.println("Updated BEARER_TOKEN: " + BEARER_TOKEN);
 
         } else {
-            System.out.println("Login failed: " + response.body());
+            // System.out.println("Login failed: " + response.body());
+            System.out.println("Login failed! Please provide valid credentials.");
         }
     }
 
     // sometimes an error message is called even if it uploaded successfully
     private static void uploadFile() throws IOException {
+        if (BEARER_TOKEN == null) {
+            System.out.println("Please login first to upload a file.");
+            return;
+        }
+
         System.out.println("Enter the file path to upload:");
         String filePath = scanner.nextLine();
         File file = new File(filePath);
@@ -150,18 +160,26 @@ public class UserClient {
 
             httpPost.setEntity(entity);
 
-            // executing request
-            try (CloseableHttpResponse response = client.execute(httpPost)) {
-                System.out.println("Response Code: " + response.getCode());
-                String responseBody = EntityUtils.toString(response.getEntity());
-                System.out.println("Response Body: " + responseBody);
-            } catch (ParseException e) {
-                throw new RuntimeException(e);
-            }
+            HttpClientResponseHandler<String> responseHandler = response -> {
+                int status = response.getCode();
+                if (status >= 200 && status < 300) {
+                    return EntityUtils.toString(response.getEntity());
+                } else {
+                    throw new HttpResponseException(status, "Unexpected response status: " + status);
+                }
+            };
+
+            String responseBody = client.execute(httpPost, responseHandler);
+            System.out.println(responseBody);
         }
     }
 
     private static void downloadFile() throws IOException {
+        if (BEARER_TOKEN == null) {
+            System.out.println("Please login first to download a file.");
+            return;
+        }
+        
         System.out.println("Enter the filename to download:");
         String fileName = scanner.nextLine();
 
@@ -179,28 +197,29 @@ public class UserClient {
             httpPost.setEntity(entity);
 
             // executing request
-            try (CloseableHttpResponse response = client.execute(httpPost)) {
-                if (response.getCode() == 200) {
-                    // this download path is not created properly currently
+            HttpClientResponseHandler<Void> responseHandler = response -> {
+                int status = response.getCode();
+                if (status == 200) {
                     Path downloadPath = Paths.get("Downloads");
                     if (!Files.exists(downloadPath)) {
                         Files.createDirectories(downloadPath);
                     }
 
-                    // writing the downloaded file to the Downloads directory
                     Files.write(downloadPath.resolve(fileName), EntityUtils.toByteArray(response.getEntity()));
-                    System.out.println("File downloaded to ./Downloads/ successfully.");
+                    System.out.println("File downloaded successfully to ./Downloads/");
+                    return null;
                 } else {
-                    System.out.println("Failed to download file. Response code: " + response.getCode());
-                    String responseBody = null;
-                    try {
-                        responseBody = EntityUtils.toString(response.getEntity());
-                    } catch (ParseException e) {
-                        throw new RuntimeException(e);
-                    }
-                    System.out.println("Response Body: " + responseBody);
+//                    String responseBody = EntityUtils.toString(response.getEntity());
+//                    System.out.println("Failed to download file. Response code: " + status);
+//                    System.out.println("Response Body: " + responseBody);
+                    System.out.println("Failed to download file! Please double check the filename and try again.");
+                    return null;
                 }
-            }
+            };
+
+            client.execute(httpPost, responseHandler);
         }
     }
 }
+
+
