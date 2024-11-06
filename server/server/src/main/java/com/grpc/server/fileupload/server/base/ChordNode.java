@@ -7,6 +7,7 @@ import com.grpc.server.fileupload.server.utils.LoadBalancer;
 import com.grpc.server.fileupload.server.utils.TreeBasedReplication;
 import io.grpc.stub.StreamObserver;
 
+import java.io.File;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -28,6 +29,8 @@ public class ChordNode {
     private final boolean multiThreadingEnabled;
     private final ExecutorService executorService;
     private final LoadBalancer loadBalancer;
+    private TreeMap<String, List<String>> fileMap; // when node joins fill this tree with existing files
+    private boolean isBootstrap;
 
     public ChordNode(String ip, int port, boolean multiThreadingEnabled, LoadBalancer loadBalancer, int m) {
         this.ip = ip;
@@ -44,6 +47,7 @@ public class ChordNode {
         this.currentHeader = new NodeHeader(ip, port, nodeId);
         this.fileStore = new FileStore();
         this.loadBalancer = loadBalancer;
+        this.fileMap = new TreeMap<>();
     }
 
     // Function to hash the node ID based on IP and port
@@ -77,16 +81,34 @@ public class ChordNode {
             initFingerTable(chordClient);
             this.updateOthers();
             chordClient.shutdown();
+            this.isBootstrap = false;
         } else {
             for (int i = 0; i < m; i++) {
                 fingerTable.getFingers().set(i, currentHeader);
             }
             this.predecessor = currentHeader;
             this.successor = currentHeader;
+            this.isBootstrap = true;
         }
 
         //call loadbalancer to register the node (ip, port)
         loadBalancer.registerNode(this.ip, this.port);
+
+        // condition so that the bootstrap node wont enter
+        if (!isBootstrap) {
+            // this will get the data transferred to us from the successor
+            // I think it will simply overwrite existing files if we have them already
+            ChordClient successorClient = new ChordClient(this.successor.getIp(), Integer.parseInt(this.successor.getPort()));
+
+            String[] span = getResponsibleSpan();
+            successorClient.retrieveFiles(span[0], span[1], this); // not fully handling the wrap around case here yet
+            successorClient.shutdown();
+        }
+
+        // looping through the directory where files are stored and adding mapping
+        // we are doing this after having gotten the files from successor
+        // for some reason this is called twice when joining
+        addMappingForExistingFiles();
 
         printFingerTable();
         printResponsibleSpan();
@@ -108,6 +130,21 @@ public class ChordNode {
         }
     }
 
+    public String[] getResponsibleSpan() {
+        String[] span = new String[2];
+
+        if (predecessor == null) {
+            span[0] = "0";
+            span[1] = String.valueOf((Math.pow(2, m) - 1));
+        }
+        else{
+            span[0] = this.predecessor.getNodeId();
+            span[1] = this.nodeId;
+        }
+
+        return span;
+    }
+
     public void printFingerTable() {
         System.out.println("Finger Table for Node ID: " + this.nodeId);
 
@@ -124,6 +161,94 @@ public class ChordNode {
         }
 
         System.out.println();
+    }
+
+    // key is filename:username, value is key generated from the filename
+    public void addMapping(String filename, String username){
+        String id = hashNode(filename);
+        String value = filename + ":" + username;
+
+        // could potentially add logic here so that user can store files with same name
+        // but it's a realistic limitation to only allow same user to store files of different names
+        fileMap.computeIfAbsent(id, k -> new ArrayList<>()).add(value);
+
+        System.out.println("addMapping() called, id: " + id + " is now mapped to the value: " + value);
+
+    }
+
+    public void removeMappingForId(String id) {
+        // Check if the list associated with the id exists in the map
+        if (fileMap.containsKey(id) && fileMap.get(id) != null && !fileMap.get(id).isEmpty()) {
+            // Remove the entire list of mappings associated with the id
+            fileMap.remove(id);
+            System.out.println("removeMappingForId() called, removed entire mapping for id: " + id);
+        } else {
+            // If no mappings exist for this id, log a message
+            System.out.println("No mapping found for id: " + id);
+        }
+    }
+
+
+
+    void addMappingForExistingFiles() {
+        // Base directory path
+        String baseDirPath = "output/" + this.nodeId;
+        File baseDir = new File(baseDirPath);
+
+        if (!baseDir.exists() || !baseDir.isDirectory()) {
+            System.out.println("Base directory does not exist: " + baseDirPath);
+            return;
+        }
+
+        // Iterate over each user's directory inside baseDir
+        File[] userDirs = baseDir.listFiles(File::isDirectory);
+        if (userDirs == null) {
+            System.out.println("No user directories found.");
+            return;
+        }
+
+        for (File userDir : userDirs) {
+            String username = userDir.getName();
+
+            // iterating over each file in the user's directory
+            File[] files = userDir.listFiles(File::isFile);
+            if (files == null) {
+                // System.out.println("No files found for user: " + username);
+                continue;
+            }
+
+            for (File file : files) {
+                String filename = file.getName();
+                addMapping(filename, username); // adding mapping for each file
+            }
+        }
+
+        System.out.println("All existing files have been mapped.");
+    }
+
+    // 99% sure this needs to be rewritten, since if starthash = 40, endHash = 10, it won't find it properly
+    public Map<String, List<String>> getFilesInRange(String startHash, String endHash) {
+        return fileMap.subMap(startHash, true, endHash, true);
+    }
+
+//    public Map<String, List<String>> getFilesInRange(String startHash, String endHash) {
+//        Map<String, List<String>> filesInRange = new HashMap<>();
+//        for (Map.Entry<String, List<String>> entry : fileMap.entrySet()) {
+//            String fileHash = entry.getKey();
+//            if (fileHash.compareTo(startHash) >= 0 && fileHash.compareTo(endHash) <= 0) {
+//                filesInRange.put(fileHash, entry.getValue());
+//            }
+//        }
+//        return filesInRange;
+//    }
+
+    public void printFilesInRange(String startHash, String endHash) {
+        Map<String, List<String>> filesInRange = getFilesInRange(startHash, endHash);
+        System.out.println("Files in range " + startHash + "-" + endHash + ":");
+        filesInRange.forEach((hash, fileKeys) -> {
+            System.out.println("Hash: " + hash);
+            fileKeys.forEach(fileKey -> System.out.println("    File: " + fileKey));
+        });
     }
 
 
@@ -165,6 +290,7 @@ public class ChordNode {
 
     // Method to update other nodes finger tables
     public void updateOthers() {
+        System.out.println("updateOthers called...");
         BigInteger mod = BigInteger.valueOf(2).pow(m);
         BigInteger nodeIdInt = new BigInteger(this.nodeId);
 
@@ -187,6 +313,16 @@ public class ChordNode {
 
             executeGrpcCall(task);
         }
+
+        System.out.println("---- Responsible span and finger table ---- ");
+        printResponsibleSpan();
+        printFingerTable();
+
+        // Responsible span: (25, 48]
+        // contact predecessor, provide range 25-48, have it loop through and transfer those files
+
+
+
     }
 
     public void updateFingerTable(NodeHeader s, int i) {
@@ -207,9 +343,9 @@ public class ChordNode {
                 executeGrpcCall(task);
             }
         }
-        System.out.println("---- Updating responsible span and finger table ---- ");
-        printResponsibleSpan();
-        printFingerTable();
+//        System.out.println("---- Updating responsible span and finger table ---- ");
+//        printResponsibleSpan();
+//        printFingerTable();
     }
 
     // Method to find the successor of a given ID

@@ -7,6 +7,7 @@ import com.devProblems.Fileupload;
 import com.devProblems.Fileupload.*;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Empty;
+import com.grpc.server.fileupload.server.utils.DiskFileStorage;
 import com.shared.proto.Constants;
 import io.grpc.*;
 import com.grpc.server.fileupload.server.types.NodeHeader;
@@ -14,7 +15,10 @@ import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
 
 import java.io.ByteArrayOutputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
 import java.util.concurrent.CompletableFuture;
@@ -144,8 +148,8 @@ public class ChordClient {
             System.err.println("closestPrecedingFinger failed");
             return null;
         }
-
     }
+
 
     public CompletableFuture<Boolean> retrieveFile(String key, String requester, StreamObserver<Fileupload.FileDownloadResponse> originalResponseObserver) {
         System.out.println("retrieveFile called");
@@ -221,6 +225,83 @@ public class ChordClient {
             originalResponseObserver.onError(e);
         }
     }
+
+
+    public void retrieveFiles(String startHash, String endHash, ChordNode chordNode) {
+        ChordGrpc.ChordStub stub = ChordGrpc.newStub(channel);
+
+        FileRangeRequest fileRangeRequest = FileRangeRequest.newBuilder()
+                .setStartHash(startHash)
+                .setEndHash(endHash)
+                .build();
+
+        // map to keep track of ByteArrayOutputStream for each file being downloaded
+        Map<String, DiskFileStorage> inProgressFiles = new HashMap<>();
+
+        StreamObserver<FileDownloadResponse> responseObserver = new StreamObserver<>() {
+            @Override
+            public void onNext(FileDownloadResponse fileDownloadResponse) {
+                String fileName = fileDownloadResponse.getFile().getFileName();
+                String username = fileDownloadResponse.getFile().getUsername();
+                byte[] fileContent = fileDownloadResponse.getFile().getContent().toByteArray();
+
+                String fileKey = fileName + ":" + username;
+
+                // Get or create DiskFileStorage for the file
+                DiskFileStorage diskFileStorage = inProgressFiles.computeIfAbsent(fileKey, k -> new DiskFileStorage());
+
+                try {
+                    // writing chunk to file
+                    diskFileStorage.getStream().write(fileContent);
+                } catch (IOException e) {
+                    System.err.println("Error writing data for file: " + fileName + " | " + e.getMessage());
+                }
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                System.err.println("Error during file download: " + t.getMessage());
+                t.printStackTrace();
+                inProgressFiles.forEach((key, diskFileStorage) -> {
+                    try {
+                        diskFileStorage.close();
+                    } catch (IOException e) {
+                        System.err.println("Failed to close stream for file: " + key);
+                    }
+                });
+            }
+
+            @Override
+            public void onCompleted() {
+                System.out.println("All files downloaded successfully. Writing files to disk...");
+
+                // writing each file to disk
+                inProgressFiles.forEach((fileKey, diskFileStorage) -> {
+                    try {
+                        // Extract filename and username from fileKey
+                        String[] fileDetails = fileKey.split(":");
+                        String fileName = fileDetails[0];
+                        String username = fileDetails[1];
+
+                        diskFileStorage.write(fileName, username, chordNode.getNodeId());
+                        diskFileStorage.close();
+
+                        chordNode.addMapping(fileName, username);
+                    } catch (IOException e) {
+                        System.err.println("Error writing file to disk for file: " + fileKey + " | " + e.getMessage());
+                    }
+                });
+
+                // clearing map since all files have been stored
+                inProgressFiles.clear();
+
+                System.out.println("All files stored on disk successfully.");
+            }
+        };
+
+        stub.retrieveFilesForSpan(fileRangeRequest, responseObserver);
+    }
+
 
 
     public void storeFile(String key, byte[] fileContent) {

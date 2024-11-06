@@ -145,7 +145,7 @@ public class UserClient {
 
         System.out.println("Enter the file path to upload:");
         String filePath = scanner.nextLine();
-        File file = new File(filePath);
+        File file = new File(filePath);r
 
         // creating the HTTP client
         try (CloseableHttpClient client = HttpClients.createDefault()) {

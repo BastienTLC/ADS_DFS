@@ -15,6 +15,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.List;
+import java.util.Map;
+import java.util.ArrayList;
 
 import com.grpc.server.fileupload.server.types.NodeHeader;
 import io.grpc.Status;
@@ -124,6 +127,8 @@ public class ChordServiceImpl extends ChordImplBase {
         NodeInfo sNodeInfo = request.getS();
         int i = request.getI();
         this.chordNode.updateFingerTable(new NodeHeader(sNodeInfo.getIp(), sNodeInfo.getPort(), sNodeInfo.getId()), i);
+//        System.out.println("Updated FingerTable is: ");
+//        this.chordNode.printFingerTable();
         responseObserver.onNext(com.google.protobuf.Empty.getDefaultInstance());
         responseObserver.onCompleted();
     }
@@ -157,8 +162,7 @@ public class ChordServiceImpl extends ChordImplBase {
     }
 
 
-    // this function will transfer file to bootstrap node so that the bootstrap node can send it back
-    // to the client
+    // this function will transfer file to a node
     @Override
     public void retrieveFile(FileDownloadRequest request, StreamObserver<FileDownloadResponse> responseObserver) {
         String filename = request.getFileName();
@@ -208,6 +212,100 @@ public class ChordServiceImpl extends ChordImplBase {
     }
 
 
+    // using FileDownloadResponse not FileDownloadListResponse CURRENTLY!
+    public void retrieveFilesForSpan(FileRangeRequest request, StreamObserver<FileDownloadResponse> responseObserver) {
+        String startHash = request.getStartHash();  // Get startHash from the request
+        String endHash = request.getEndHash();      // Get endHash from the request
+
+        // Fetch the files within the specified hash range
+        Map<String, List<String>> filesInRange = chordNode.getFilesInRange(startHash, endHash);
+
+        // so if it transfers files in directory 21, 22, 23 etc it will remove them
+        List<String> idsToRemove = new ArrayList<>();
+        List<Path> filesToDelete = new ArrayList<>();
+
+        // Loop through the files in the range and retrieve them one by one
+        filesInRange.forEach((hash, fileKeys) -> {
+            fileKeys.forEach(fileKey -> {
+                String[] fileDetails = fileKey.split(":");
+                String filename = fileDetails[0];
+                String username = fileDetails[1];
+
+                // Build the file path based on the filename and requester
+                String filePath = "output/" + this.chordNode.getNodeId() + "/" + username + "/" + filename;
+                Path path = Paths.get(filePath);
+
+                if (!Files.exists(path) || !Files.isRegularFile(path)) {
+                    System.out.printf("File not found: %s%n", filename);
+                    responseObserver.onError(Status.NOT_FOUND.withDescription("File not found").asRuntimeException());
+                    return;
+                }
+
+                // Send the file content if it exists
+                try (InputStream inputStream = new FileInputStream(path.toFile())) {
+                    byte[] fiveKB = new byte[5120];
+                    int length;
+
+                    while ((length = inputStream.read(fiveKB)) > 0) {
+                        System.out.println(String.format("Sending %d length of data for file: %s", length, filename));
+                        File fileMessage = File.newBuilder()
+                                .setContent(ByteString.copyFrom(fiveKB, 0, length))
+                                .setFileName(filename)        // Set the file name
+                                .setUsername(username)       // Set the username (requester)
+                                .build();
+
+                        FileDownloadResponse response = FileDownloadResponse.newBuilder()
+                                .setFile(fileMessage)  // Use the File message containing the content
+                                .build();
+
+                        // Send each chunk as it is read
+                        responseObserver.onNext(response);
+                    }
+
+
+                    if (!idsToRemove.contains(hash)) {
+                        idsToRemove.add(hash);
+                    }
+
+                    filesToDelete.add(path);
+
+
+                } catch (IOException e) {
+                    System.err.println("Error reading file " + filename + ": " + e.getMessage());
+                    responseObserver.onError(Status.INTERNAL.withDescription("Error reading file").asRuntimeException());
+                    e.printStackTrace();
+                    return;
+                }
+            });
+        });
+
+
+        // deleting all files that we sent away (and the directory they are in if they are now empty)
+        filesToDelete.forEach(file -> {
+            try {
+                System.out.println("Deleting file: " + file);
+                Files.deleteIfExists(file);
+
+                // Check if the parent directory is empty after file deletion
+                Path parentDir = file.getParent();
+                if (Files.isDirectory(parentDir) && Files.list(parentDir).count() == 0) {
+                    Files.deleteIfExists(parentDir);
+                    System.out.println("Deleted empty directory: " + parentDir);
+                }
+
+            } catch (IOException e) {
+                System.err.println("Failed to delete file or directory: " + file + " - " + e.getMessage());
+            }
+        });
+
+
+        // this will safely remove mappings we no longer need
+        idsToRemove.forEach(chordNode::removeMappingForId);
+
+        // signalling that all files have been sent
+        responseObserver.onCompleted();
+    }
+
 
 
     @Override
@@ -248,8 +346,14 @@ public class ChordServiceImpl extends ChordImplBase {
                     // it is the same that the server has received
                     if (totalBytesReceived == fileMetadata.getContentLength()) {
                         // if matches we write to the diskFileStorage
+                        System.out.println("Writing the file to the following NodeId directory: " + chordNode.getNodeId());
                         diskFileStorage.write(fileMetadata.getFileNameWithType(),fileMetadata.getAuthor(), chordNode.getNodeId());
                         diskFileStorage.close();
+
+                        chordNode.addMapping(fileMetadata.getFileNameWithType(), fileMetadata.getAuthor());
+
+
+
                     } else {
                         // notifying the client with error
                         responseObserver.onError(
@@ -280,27 +384,6 @@ public class ChordServiceImpl extends ChordImplBase {
             }
         };
     }
-
-//    @Override
-//    public void retrieveMessage(RetrieveMessageRequest request, StreamObserver<RetrieveMessageResponse> responseObserver) {
-//        String key = request.getKey();
-//
-//        com.grpc.server.fileupload.server.types.Message message = chordNode.getMessageStore().retrieveMessage(key);
-//
-//        Message messageRpc = message != null ? Wrapper.wrapMessageToGrpcMessage(message) : null;
-//
-//        RetrieveMessageResponse.Builder responseBuilder = RetrieveMessageResponse.newBuilder();
-//
-//        if (message != null) {
-//            responseBuilder.setFound(true)
-//                    .setMessage(messageRpc);
-//        } else {
-//            responseBuilder.setFound(false);
-//        }
-//
-//        responseObserver.onNext(responseBuilder.build());
-//        responseObserver.onCompleted();
-//    }
 
     public void deleteFile(FileDownloadRequest request, StreamObserver<com.google.protobuf.Empty> responseObserver) {
         String filename = request.getFileName();

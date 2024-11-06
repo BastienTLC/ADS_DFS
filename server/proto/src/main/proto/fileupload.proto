@@ -8,6 +8,7 @@ import "google/protobuf/empty.proto";
 message File {
   bytes content = 1;
   string fileName = 2;
+  string username = 3; // new
 }
 
 message FileUploadRequest {
@@ -31,6 +32,11 @@ message FileUploadResponse {
 
 message FileDownloadResponse {
   File file = 1;
+}
+
+message FileRangeRequest {
+  string startHash = 1;
+  string endHash = 2;
 }
 
 message FileTesting {
@@ -189,5 +195,8 @@ service Chord {
   rpc retrieveFileFromChord (FileDownloadRequest) returns (stream FileDownloadResponse);
   rpc deleteFileFromChord (FileDownloadRequest) returns (google.protobuf.Empty);
   rpc getChordNodeInfo (google.protobuf.Empty) returns (Node);
+
+  // for joining when multiple files are transferred
+  rpc retrieveFilesForSpan (FileRangeRequest) returns (stream FileDownloadResponse);
 
 }
