@@ -119,6 +119,10 @@ message ClosestRequest {
   string id = 1;
 }
 
+message SuccessorListResponse {
+  repeated NodeInfo successorList = 1;
+}
+
 
 message StoreFileResponse {
   string fileName = 1;
@@ -148,6 +152,10 @@ message FileStore {
   repeated File files = 1;
 }
 
+message GetStoredKeysResponse {
+  repeated string keys = 1;
+}
+
 // Service Definitions
 service FileUploadService {
   rpc uploadFile (stream FileUploadRequest) returns (FileUploadResponse) {}
@@ -175,6 +183,7 @@ service Chord {
   rpc ping (PingRequest) returns (PingResponse);
   rpc getPredecessor (google.protobuf.Empty) returns (NodeInfo);
   rpc getSuccessor (google.protobuf.Empty) returns (NodeInfo);
+  rpc getSuccessorList (google.protobuf.Empty) returns (SuccessorListResponse);
   rpc setPredecessor (NodeInfo) returns (google.protobuf.Empty);
   rpc setSuccessor (NodeInfo) returns (google.protobuf.Empty);
   rpc closestPrecedingFinger (ClosestRequest) returns (NodeInfo);
@@ -183,6 +192,8 @@ service Chord {
   rpc storeFile(stream FileUploadRequest) returns (FileUploadResponse);
   rpc retrieveFile(FileDownloadRequest) returns (stream FileDownloadResponse);
   rpc deleteFile(FileDownloadRequest) returns (google.protobuf.Empty);
+  rpc getStoredKeys(google.protobuf.Empty) returns (GetStoredKeysResponse);
+
 
   // Stream-based File management in Chord
   rpc storeFileInChord (stream FileUploadRequest) returns (FileUploadResponse);

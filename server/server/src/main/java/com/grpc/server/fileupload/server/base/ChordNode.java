@@ -3,11 +3,15 @@ package com.grpc.server.fileupload.server.base;
 
 import com.devProblems.Fileupload;
 import com.grpc.server.fileupload.server.types.NodeHeader;
+import com.grpc.server.fileupload.server.utils.DiskFileStorage;
 import com.grpc.server.fileupload.server.utils.LoadBalancer;
 import com.grpc.server.fileupload.server.utils.TreeBasedReplication;
 import io.grpc.stub.StreamObserver;
 
+import java.io.IOException;
 import java.math.BigInteger;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
@@ -24,10 +28,12 @@ public class ChordNode {
     private final FingerTable fingerTable; // Finger table for routing
     private final int m; // Number of bits for the identifier space
     private NodeHeader currentHeader;
-    private FileStore fileStore;
+    private DiskFileStorage diskFileStorage;
     private final boolean multiThreadingEnabled;
     private final ExecutorService executorService;
     private final LoadBalancer loadBalancer;
+    private List<NodeHeader> successorList;
+    private final int successorListSize;
 
     public ChordNode(String ip, int port, boolean multiThreadingEnabled, LoadBalancer loadBalancer, int m) {
         this.ip = ip;
@@ -42,8 +48,10 @@ public class ChordNode {
         this.nodeId = hashNode(ip + ":" + port);
         this.fingerTable = new FingerTable(this, m);
         this.currentHeader = new NodeHeader(ip, port, nodeId);
-        this.fileStore = new FileStore();
+        this.diskFileStorage = new DiskFileStorage();
         this.loadBalancer = loadBalancer;
+        this.successorListSize = 5;
+        this.successorList = new ArrayList<>(Collections.nCopies(successorListSize, null));
     }
 
     // Function to hash the node ID based on IP and port
@@ -68,7 +76,9 @@ public class ChordNode {
     public NodeHeader getPredecessor() { return this.predecessor; }
     public void setPredecessor(NodeHeader predecessor) { this.predecessor = predecessor; }
     public FingerTable getFingerTable() { return this.fingerTable; }
-    public FileStore getMessageStore() { return this.fileStore; }
+    public DiskFileStorage getDiskFileStorage() { return this.diskFileStorage; }
+    public List<NodeHeader> getSuccessorList() { return successorList; }
+    public void setSuccessorList(List<NodeHeader> successorList) { this.successorList = successorList; }
 
     // Method to join the network
     public void join(String existingNodeIp, int existingNodePort) {
@@ -84,7 +94,7 @@ public class ChordNode {
             this.predecessor = currentHeader;
             this.successor = currentHeader;
         }
-
+        initializeSuccessorList();
         //call loadbalancer to register the node (ip, port)
         loadBalancer.registerNode(this.ip, this.port);
 
@@ -130,7 +140,7 @@ public class ChordNode {
     public void leave() {
         loadBalancer.deregisterNode(this.ip, this.port);
         if (this.successor != null && !this.successor.equals(this.currentHeader)) {
-            // No keys to transfer since this node doesn't store any files
+            transferFilesToSuccessor();
         }
 
         // Update successor and predecessor pointers
@@ -212,16 +222,54 @@ public class ChordNode {
         printFingerTable();
     }
 
+
+    public void updateSuccessorList() {
+        ChordClient successorClient = new ChordClient(successor.getIp(), Integer.parseInt(successor.getPort()));
+        List<NodeHeader> successorSuccessorList = successorClient.getSuccessorList();
+        successorClient.shutdown();
+
+        // Ensure successorList has the correct size
+        while (successorList.size() < successorListSize) {
+            successorList.add(null);
+        }
+
+        successorList.set(0, successor);
+        for (int i = 1; i < successorListSize; i++) {
+            if (i - 1 < successorSuccessorList.size()) {
+                successorList.set(i, successorSuccessorList.get(i - 1));
+            } else {
+                successorList.set(i, null);
+            }
+        }
+    }
+
+
     // Method to find the successor of a given ID
     public NodeHeader findSuccessor(String id) {
         NodeHeader predecessorNode = findPredecessor(id);
+        NodeHeader successorNode = null;
+        int attempts = 0;
 
-        ChordClient predecessorClient = new ChordClient(predecessorNode.getIp(), Integer.parseInt(predecessorNode.getPort()));
-        NodeHeader successor = predecessorClient.getSuccessor();
-        predecessorClient.shutdown();
+        while (attempts < successorListSize) {
+            try {
+                ChordClient predecessorClient = new ChordClient(predecessorNode.getIp(), Integer.parseInt(predecessorNode.getPort()));
+                successorNode = predecessorClient.getSuccessor();
+                predecessorClient.shutdown();
+                break;
+            } catch (Exception e) {
 
-        return successor;
+                attempts++;
+                if (attempts < successorListSize && successorList.get(attempts) != null) {
+                    predecessorNode = successorList.get(attempts);
+                } else {
+                    throw new RuntimeException("Aucun successeur disponible pour trouver le successeur de l'ID : " + id);
+                }
+            }
+        }
+
+        return successorNode;
     }
+
 
     // Method to find the predecessor of a given ID
     public NodeHeader findPredecessor(String id) {
@@ -272,30 +320,81 @@ public class ChordNode {
 
     // Method to stabilize the node
     public void stabilize() {
-        final String successorIp = successor.getIp();
-        final int successorPort = Integer.parseInt(successor.getPort());
-
         Runnable task = () -> {
-            ChordClient successorClient = new ChordClient(successorIp, successorPort);
-            NodeHeader x = successorClient.getPredecessor();
-
-            if (x != null && isInIntervalOpenOpen(x.getNodeId(), this.nodeId, successor.getNodeId())) {
-                this.successor = x;
+            if (this.successor.equals(this.currentHeader)) {
+                // Seul nœud dans le réseau, rien à stabiliser
+                return;
             }
 
-            successorClient.notify(this.currentHeader);
-            successorClient.shutdown();
+            final String successorIp = successor.getIp();
+            final int successorPort = Integer.parseInt(successor.getPort());
+
+            ChordClient successorClient = null;
+            try {
+                successorClient = new ChordClient(successorIp, successorPort);
+                NodeHeader x = successorClient.getPredecessor();
+
+                if (x != null && isInIntervalOpenOpen(x.getNodeId(), this.nodeId, successor.getNodeId())) {
+                    this.successor = x;
+                }
+
+                successorClient.notify(this.currentHeader);
+            } catch (Exception e) {
+                System.err.println("Unexpected error in stabilize(): " + e.getMessage());
+                // Éviter de modifier le successeur si c'est le nœud lui-même
+                if (!this.successor.equals(this.currentHeader)) {
+                    handleFailedSuccessor();
+                }
+            } finally {
+                if (successorClient != null) {
+                    successorClient.shutdown();
+                }
+            }
         };
 
         executeGrpcCall(task);
     }
 
+
+    private void handleFailedSuccessor() {
+        if (this.successor.equals(this.currentHeader)) {
+            return;
+        }
+
+        // Mark the current successor as failed
+        if (!successorList.isEmpty()) {
+            successorList.set(0, null);
+        }
+
+        // Find the next available successor
+        NodeHeader nextSuccessor = null;
+        for (NodeHeader node : successorList) {
+            if (node != null && !node.equals(currentHeader)) {
+                nextSuccessor = node;
+                break;
+            }
+        }
+
+        if (nextSuccessor != null) {
+            successor = nextSuccessor;
+        } else {
+            successor = currentHeader;
+        }
+
+        // Update the successor list
+        updateSuccessorList();
+    }
+
+
     // Method to notify a node
     public void notify(NodeHeader n) {
         if (this.predecessor == null || isInIntervalOpenOpen(n.getNodeId(), this.predecessor.getNodeId(), this.nodeId)) {
-            this.predecessor = n;
+            if (!n.equals(this.currentHeader)) {
+                this.predecessor = n;
+            }
         }
     }
+
 
     // Method to fix fingers periodically
     public void fixFingers() {
@@ -333,6 +432,23 @@ public class ChordNode {
             } else {
                 NodeHeader successorNodeI = n0Client.findSuccessor(start);
                 fingerTable.getFingers().set(i, successorNodeI);
+            }
+        }
+    }
+
+    private void initializeSuccessorList() {
+        this.successorList.set(0, this.successor);
+        ChordClient successorClient = new ChordClient(successor.getIp(), Integer.parseInt(successor.getPort()));
+        List<NodeHeader> successorSuccessorList = successorClient.getSuccessorList();
+        successorClient.shutdown();
+
+        int index = 1;
+        for (NodeHeader nodeHeader : successorSuccessorList) {
+            if (nodeHeader != null && index < successorListSize) {
+                this.successorList.set(index, nodeHeader);
+                index++;
+            } else {
+                break;
             }
         }
     }
@@ -433,6 +549,42 @@ public class ChordNode {
 
         responsibleNodeClient.shutdown();
         // return message;
+    }
+
+
+    public void transferFilesToSuccessor() {
+        ChordClient successorClient = new ChordClient(successor.getIp(), Integer.parseInt(successor.getPort()));
+
+        try {
+            List<Path> files = this.diskFileStorage.getAllFiles(this.nodeId);
+            System.out.println("Transferring " + files.size() + " files to successor: " + successor.getIp() + ":" + successor.getPort());
+            for (Path filePath : files) {
+                System.out.println("Transferring file: " + filePath.toString());
+                // Extract the file name and author from the file path
+                String fileName = filePath.getFileName().toString();
+                String author = filePath.getParent().getFileName().toString(); // Assuming the parent directory is the author
+
+                // Read the content of the file
+                byte[] content = Files.readAllBytes(filePath);
+
+                // Create metadata for the file
+                Fileupload.FileMetadata fileMetadata = Fileupload.FileMetadata.newBuilder()
+                        .setFileNameWithType(fileName)
+                        .setContentLength(content.length)
+                        .setAuthor(author)
+                        .build();
+
+                // Transfer the file to the successor node
+                successorClient.storeFileWithMetadata(fileMetadata, content);
+
+                // Delete the file from the current node
+                diskFileStorage.deleteFile(fileName, author, nodeId);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            successorClient.shutdown();
+        }
     }
 
 

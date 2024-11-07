@@ -15,6 +15,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 import com.grpc.server.fileupload.server.types.NodeHeader;
 import io.grpc.Status;
@@ -110,6 +113,29 @@ public class ChordServiceImpl extends ChordImplBase {
         }
         responseObserver.onCompleted();
     }
+
+    @Override
+    public void getSuccessorList(Empty request, StreamObserver<SuccessorListResponse> responseObserver) {
+        List<NodeHeader> successorList = chordNode.getSuccessorList();
+
+        // Filtrer les éléments null
+        List<NodeInfo> successorNodeInfos = successorList.stream()
+                .filter(Objects::nonNull)
+                .map(nodeHeader -> NodeInfo.newBuilder()
+                        .setId(nodeHeader.getNodeId())
+                        .setIp(nodeHeader.getIp())
+                        .setPort(Integer.parseInt(nodeHeader.getPort()))
+                        .build())
+                .collect(Collectors.toList());
+
+        SuccessorListResponse response = SuccessorListResponse.newBuilder()
+                .addAllSuccessorList(successorNodeInfos)
+                .build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
 
     @Override
     public void setSuccessor(NodeInfo request, StreamObserver<com.google.protobuf.Empty> responseObserver) {

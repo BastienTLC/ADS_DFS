@@ -12,12 +12,15 @@ import io.grpc.*;
 import com.grpc.server.fileupload.server.types.NodeHeader;
 import io.grpc.stub.MetadataUtils;
 import io.grpc.stub.StreamObserver;
+import org.w3c.dom.NodeList;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 import static com.devProblems.ChordGrpc.newBlockingStub;
 
@@ -38,6 +41,13 @@ public class ChordClient {
         channel.shutdown();
     }
 
+    private ChordGrpc.ChordStub getStubWithMetadata(FileMetadata fileMetadata) {
+        Metadata metadata = new Metadata();
+        metadata.put(Constants.fileMetadataKey, fileMetadata.toByteArray());
+        ClientInterceptor headerInterceptor = MetadataUtils.newAttachHeadersInterceptor(metadata);
+        return ChordGrpc.newStub(channel).withInterceptors(headerInterceptor);
+    }
+
     public NodeHeader findSuccessor(String keyId) {
         NodeInfo request = NodeInfo.newBuilder().setId(keyId).build();
 
@@ -51,13 +61,8 @@ public class ChordClient {
     }
 
     public NodeHeader getPredecessor() {
-        try {
-            NodeInfo nodeInfo = blockingStub.getPredecessor(Empty.getDefaultInstance());
-            return new NodeHeader(nodeInfo.getIp(), nodeInfo.getPort(), nodeInfo.getId());
-        } catch (StatusRuntimeException e) {
-            System.err.println("getPredecessor failed");
-            return null;
-        }
+        NodeInfo nodeInfo = blockingStub.getPredecessor(Empty.getDefaultInstance());
+        return new NodeHeader(nodeInfo.getIp(), nodeInfo.getPort(), nodeInfo.getId());
     }
 
     public void setPredecessor(NodeHeader node) {
@@ -82,6 +87,22 @@ public class ChordClient {
             return null;
         }
     }
+
+    public List<NodeHeader> getSuccessorList() {
+        Empty request = Empty.newBuilder().build();
+        SuccessorListResponse response = blockingStub.getSuccessorList(request);
+
+        List<NodeHeader> successorList = response.getSuccessorListList().stream()
+                .map(nodeInfo -> new NodeHeader(
+                        nodeInfo.getIp(),
+                        nodeInfo.getPort(),
+                        nodeInfo.getId()
+                ))
+                .collect(Collectors.toList());
+
+        return successorList;
+    }
+
 
     public void setSuccessor(NodeHeader node) {
         NodeInfo nodeInfo = NodeInfo.newBuilder()
@@ -294,36 +315,57 @@ public class ChordClient {
         }
     }
 
-    /*public boolean storeFile(String key, File file) {
-        StoreFileRequest request = StoreFileRequest.newBuilder()
-                .setKey(key)
-                .setFile(file)
-                .build();
-        try {
-            // call upload streaming function
-            return response.getSuccess();
-        } catch (StatusRuntimeException e) {
-            System.err.println("store failed");
-            return false;
-        }
-    }*/
+    public void storeFileWithMetadata(FileMetadata fileMetadata, byte[] fileContent) {
+        // Create a stub with the file metadata attached to the headers
+        ChordGrpc.ChordStub stub = getStubWithMetadata(fileMetadata);
 
+        System.out.println("storeFileWithMetadata called with file: " + fileMetadata.getFileNameWithType());
 
-
-    /*public Message retrieveMessage(String key) {
-        RetrieveMessageRequest request = RetrieveMessageRequest.newBuilder()
-                .setKey(key)
-                .build();
-        try {
-            RetrieveMessageResponse response = blockingStub.retrieveMessage(request);
-            if (response.getFound()) {
-                return response.getMessage();
-            } else {
-                return null;
+        // Create a response observer
+        CountDownLatch finishLatch = new CountDownLatch(1);  // For synchronization
+        StreamObserver<FileUploadResponse> responseObserver = new StreamObserver<>() {
+            @Override
+            public void onNext(FileUploadResponse value) {
+                System.out.println("File upload status: " + value.getUploadStatus());
             }
-        } catch (StatusRuntimeException e) {
-            System.err.println("Message not found");
-            return null;
+
+            @Override
+            public void onError(Throwable t) {
+                t.printStackTrace();
+                finishLatch.countDown();  // Signal that the process failed
+            }
+
+            @Override
+            public void onCompleted() {
+                System.out.println("File upload completed.");
+                finishLatch.countDown();  // Signal that the process is done
+            }
+        };
+
+        // Start streaming the file content
+        StreamObserver<FileUploadRequest> requestObserver = stub.storeFile(responseObserver);
+
+        // Stream the file content in chunks
+        int chunkSize = 5120;  // 5KB
+        int offset = 0;
+        try {
+            while (offset < fileContent.length) {
+                int length = Math.min(chunkSize, fileContent.length - offset);
+                ByteString content = ByteString.copyFrom(fileContent, offset, length);
+                FileUploadRequest request = FileUploadRequest.newBuilder()
+                        .setFile(File.newBuilder().setContent(content))
+                        .build();
+                requestObserver.onNext(request);
+                offset += length;
+            }
+            // Mark the end of the stream
+            requestObserver.onCompleted();
+
+            // Wait until the file upload is complete or an error occurs
+            finishLatch.await();
+        } catch (Exception e) {
+            e.printStackTrace();
+            requestObserver.onError(e);  // Notify the server of the error
         }
-    }*/
+    }
 }

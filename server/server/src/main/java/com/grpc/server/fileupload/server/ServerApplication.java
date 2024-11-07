@@ -121,7 +121,7 @@ public class ServerApplication implements CommandLineRunner {
 		// Add shutdown hook
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
 			System.out.println("Shutting down the gRPC server...");
-			node.leave();
+			//node.leave();
 			server.shutdown();
 		}));
 
