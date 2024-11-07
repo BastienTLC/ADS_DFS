@@ -18,9 +18,7 @@ public class ScheduledTask {
             try {
                  node.stabilize();
                  node.fixFingers();
-                 node.updateSuccessorList();
-                 node.printResponsibleSpan();
-                 node.printFingerTable();
+                 //node.updateSuccessorList();
             } catch (Exception e) {
                 e.printStackTrace();
             }

@@ -96,10 +96,6 @@ message LeaveResponse {
   bool success = 1;
 }
 
-message PingRequest {
-  NodeInfo node = 1;
-}
-
 message PingResponse {
   bool alive = 1;
 }
@@ -180,7 +176,7 @@ service Chord {
   rpc stabilize (StabilizeRequest) returns (StabilizeResponse);
   rpc notify (NotifyRequest) returns (NotifyResponse);
   rpc leave (google.protobuf.Empty) returns (LeaveResponse);
-  rpc ping (PingRequest) returns (PingResponse);
+  rpc ping (google.protobuf.Empty) returns (PingResponse);
   rpc getPredecessor (google.protobuf.Empty) returns (NodeInfo);
   rpc getSuccessor (google.protobuf.Empty) returns (NodeInfo);
   rpc getSuccessorList (google.protobuf.Empty) returns (SuccessorListResponse);

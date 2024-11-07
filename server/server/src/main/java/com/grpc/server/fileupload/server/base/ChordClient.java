@@ -368,4 +368,12 @@ public class ChordClient {
             requestObserver.onError(e);  // Notify the server of the error
         }
     }
+
+    public void ping() {
+        try {
+            blockingStub.ping(Empty.getDefaultInstance());
+        } catch (StatusRuntimeException e) {
+            System.err.println("ping failed");
+        }
+    }
 }

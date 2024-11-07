@@ -136,6 +136,23 @@ public class ChordNode {
         System.out.println();
     }
 
+    public void printSuccessorList() {
+        System.out.println("Successor List for Node ID: " + this.nodeId);
+
+        for (int i = 0; i < successorListSize; i++) {
+            NodeHeader successor = successorList.get(i);
+
+            if (successor != null) {
+                System.out.printf("Entry %d: Node ID = %s, Address = %s:%s%n",
+                        i, successor.getNodeId(), successor.getIp(), successor.getPort());
+            } else {
+                System.out.printf("Entry %d: Node ID = null%n", i);
+            }
+        }
+
+        System.out.println();
+    }
+
 
     public void leave() {
         loadBalancer.deregisterNode(this.ip, this.port);
@@ -244,6 +261,7 @@ public class ChordNode {
     }
 
 
+
     // Method to find the successor of a given ID
     public NodeHeader findSuccessor(String id) {
         NodeHeader predecessorNode = findPredecessor(id);
@@ -262,7 +280,7 @@ public class ChordNode {
                 if (attempts < successorListSize && successorList.get(attempts) != null) {
                     predecessorNode = successorList.get(attempts);
                 } else {
-                    throw new RuntimeException("Aucun successeur disponible pour trouver le successeur de l'ID : " + id);
+                    throw new RuntimeException("Failed to find successor for ID: " + id);
                 }
             }
         }
@@ -271,6 +289,7 @@ public class ChordNode {
     }
 
 
+    // Method to find the predecessor of a given ID
     // Method to find the predecessor of a given ID
     public NodeHeader findPredecessor(String id) {
         NodeHeader nPrime = this.currentHeader;
@@ -321,30 +340,18 @@ public class ChordNode {
     // Method to stabilize the node
     public void stabilize() {
         Runnable task = () -> {
-            if (this.successor.equals(this.currentHeader)) {
-                // Seul nœud dans le réseau, rien à stabiliser
-                return;
-            }
-
-            final String successorIp = successor.getIp();
-            final int successorPort = Integer.parseInt(successor.getPort());
-
-            ChordClient successorClient = null;
+            ChordClient successorClient = new ChordClient(successor.getIp(), Integer.parseInt(successor.getPort()));
             try {
-                successorClient = new ChordClient(successorIp, successorPort);
                 NodeHeader x = successorClient.getPredecessor();
 
-                if (x != null && isInIntervalOpenOpen(x.getNodeId(), this.nodeId, successor.getNodeId())) {
+                if (x != null && isInIntervalOpenOpen(x.getNodeId(), this.nodeId, successor.getNodeId()) && !x.equals(this.currentHeader)) {
                     this.successor = x;
                 }
 
                 successorClient.notify(this.currentHeader);
             } catch (Exception e) {
                 System.err.println("Unexpected error in stabilize(): " + e.getMessage());
-                // Éviter de modifier le successeur si c'est le nœud lui-même
-                if (!this.successor.equals(this.currentHeader)) {
-                    handleFailedSuccessor();
-                }
+                handleFailedSuccessor();
             } finally {
                 if (successorClient != null) {
                     successorClient.shutdown();
@@ -357,6 +364,7 @@ public class ChordNode {
 
 
     private void handleFailedSuccessor() {
+        printSuccessorList();
         if (this.successor.equals(this.currentHeader)) {
             return;
         }
@@ -383,15 +391,14 @@ public class ChordNode {
 
         // Update the successor list
         updateSuccessorList();
+        printSuccessorList();
     }
 
 
     // Method to notify a node
     public void notify(NodeHeader n) {
         if (this.predecessor == null || isInIntervalOpenOpen(n.getNodeId(), this.predecessor.getNodeId(), this.nodeId)) {
-            if (!n.equals(this.currentHeader)) {
-                this.predecessor = n;
-            }
+            this.predecessor = n;
         }
     }
 

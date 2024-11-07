@@ -91,6 +91,12 @@ public class ChordServiceImpl extends ChordImplBase {
     }
 
     @Override
+    public void ping(Empty request, StreamObserver<PingResponse> responseObserver) {
+        responseObserver.onNext(PingResponse.newBuilder().setAlive(true).build());
+        responseObserver.onCompleted();
+    }
+
+    @Override
     public void setPredecessor(NodeInfo request, StreamObserver<com.google.protobuf.Empty> responseObserver) {
         NodeHeader predecessor = new NodeHeader(request.getIp(), request.getPort(), request.getId());
         chordNode.setPredecessor(predecessor);
