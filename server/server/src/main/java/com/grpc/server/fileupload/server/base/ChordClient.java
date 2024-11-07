@@ -51,13 +51,8 @@ public class ChordClient {
     }
 
     public NodeHeader getPredecessor() {
-        try {
-            NodeInfo nodeInfo = blockingStub.getPredecessor(Empty.getDefaultInstance());
-            return new NodeHeader(nodeInfo.getIp(), nodeInfo.getPort(), nodeInfo.getId());
-        } catch (StatusRuntimeException e) {
-            System.err.println("getPredecessor failed");
-            return null;
-        }
+        NodeInfo nodeInfo = blockingStub.getPredecessor(Empty.getDefaultInstance());
+        return new NodeHeader(nodeInfo.getIp(), nodeInfo.getPort(), nodeInfo.getId());
     }
 
     public void setPredecessor(NodeHeader node) {
@@ -74,13 +69,8 @@ public class ChordClient {
     }
 
     public NodeHeader getSuccessor() {
-        try {
-            NodeInfo nodeInfo = blockingStub.getSuccessor(Empty.getDefaultInstance());
-            return new NodeHeader(nodeInfo.getIp(), nodeInfo.getPort(), nodeInfo.getId());
-        } catch (StatusRuntimeException e) {
-            System.err.println("getSuccessor failed");
-            return null;
-        }
+        NodeInfo nodeInfo = blockingStub.getSuccessor(Empty.getDefaultInstance());
+        return new NodeHeader(nodeInfo.getIp(), nodeInfo.getPort(), nodeInfo.getId());
     }
 
     public void setSuccessor(NodeHeader node) {

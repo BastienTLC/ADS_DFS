@@ -18,6 +18,8 @@ public class ScheduledTask {
             try {
                  node.stabilize();
                  node.fixFingers();
+                 node.checkPredecessor();
+                 node.printFingerTable();
             } catch (Exception e) {
                 e.printStackTrace();
             }
