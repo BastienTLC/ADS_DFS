@@ -30,7 +30,9 @@ public class ChordNode {
     private final ExecutorService executorService;
     private final LoadBalancer loadBalancer;
     private TreeMap<String, List<String>> fileMap; // when node joins fill this tree with existing files
-    private boolean isBootstrap;
+    private Map<String, NodeReplicationRecord> nodeReplicationMap;
+
+    private record NodeReplicationRecord(String nodeIdentifier, List<String> fileIdentifiers) {};
 
     public ChordNode(String ip, int port, boolean multiThreadingEnabled, LoadBalancer loadBalancer, int m) {
         this.ip = ip;
@@ -48,6 +50,7 @@ public class ChordNode {
         this.fileStore = new FileStore();
         this.loadBalancer = loadBalancer;
         this.fileMap = new TreeMap<>();
+        this.nodeReplicationMap = new HashMap<>();
     }
 
     // Function to hash the node ID based on IP and port
@@ -76,19 +79,20 @@ public class ChordNode {
 
     // Method to join the network
     public void join(String existingNodeIp, int existingNodePort) {
+        boolean isBootstrap;
         if (existingNodeIp != null) {
             ChordClient chordClient = new ChordClient(existingNodeIp, existingNodePort);
             initFingerTable(chordClient);
             this.updateOthers();
             chordClient.shutdown();
-            this.isBootstrap = false;
+            isBootstrap = false;
         } else {
             for (int i = 0; i < m; i++) {
                 fingerTable.getFingers().set(i, currentHeader);
             }
             this.predecessor = currentHeader;
             this.successor = currentHeader;
-            this.isBootstrap = true;
+            isBootstrap = true;
         }
 
         //call loadbalancer to register the node (ip, port)
@@ -173,8 +177,84 @@ public class ChordNode {
         fileMap.computeIfAbsent(id, k -> new ArrayList<>()).add(value);
 
         System.out.println("addMapping() called, id: " + id + " is now mapped to the value: " + value);
-
     }
+
+
+    // This function is called in ChordServiceImpl each time a file is stored
+    // it essentially makes us able to keep track in which nodes all replicas are stored
+    public void addFileRecord(String filename, String username){
+        String id = hashNode(filename);
+        String fileIdentifier = filename + ":" + username;
+
+        // We create a tree to determine which nodes store a replica
+        int maxDepth = 1; // this is the depth it will be doing replication for, so actual depth of tree is 2
+        TreeBasedReplication treeReplication = new TreeBasedReplication(m);
+        Map<Integer, List<Integer>> replicaTree = treeReplication.generateReplicaTree(Integer.parseInt(id), maxDepth);
+        List<Integer> leafNodes = treeReplication.getLeafNodes(replicaTree);
+        System.out.println("Leaf Nodes: " + leafNodes);
+
+        Set<String> storedNodeIdentifiers = new HashSet<>();
+
+        for (Integer replicaKey : leafNodes) {
+            NodeHeader responsibleNode = findSuccessor(replicaKey.toString());
+            String nodeIdentifier = responsibleNode.getIp() + ":" + responsibleNode.getPort();
+
+            if (storedNodeIdentifiers.add(nodeIdentifier)) {  // this returns false if already present
+                // retrieving or initialize the record for this node
+                NodeReplicationRecord existingRecord = nodeReplicationMap.get(nodeIdentifier);
+                List<String> updatedFileIdentifiers;
+
+                if (existingRecord == null) {
+                    // initializing new list if no existing record
+                    updatedFileIdentifiers = new ArrayList<>();
+                } else {
+                    // copying existing fileIdentifiers if record exists
+                    updatedFileIdentifiers = new ArrayList<>(existingRecord.fileIdentifiers());
+                }
+
+                // adding the new file identifier
+                updatedFileIdentifiers.add(fileIdentifier);
+
+                // creating a new record with the updated list
+                NodeReplicationRecord updatedRecord = new NodeReplicationRecord(nodeIdentifier, updatedFileIdentifiers);
+
+                // updating the map with the new or updated record
+                nodeReplicationMap.put(nodeIdentifier, updatedRecord);
+
+                System.out.println("Added the fileIdentifier: " + fileIdentifier +
+                        " to the nodeIdentifier: " + nodeIdentifier + " in record.");
+            }
+
+        }
+    }
+
+    // Two utility functions related to managing records
+    // This will help us determine which nodes to replicate to if one is missing
+    // If a Node joins, not sure if we simply should transfer the entire record of that node that is
+    // no longer reachable, or calculate the tree again
+    public List<String> getFileIdentifiersForNode(String nodeIdentifier) {
+        NodeReplicationRecord record = nodeReplicationMap.get(nodeIdentifier);
+        if (record != null) {
+            return new ArrayList<>(record.fileIdentifiers());
+        } else {
+            System.out.println("No record found for nodeIdentifier: " + nodeIdentifier);
+            return Collections.emptyList();
+        }
+    }
+
+    public void printFileIdentifiersForNode(String nodeIdentifier) {
+        NodeReplicationRecord record = nodeReplicationMap.get(nodeIdentifier);
+        if (record != null) {
+            System.out.println("fileIdentifiers associated with the nodeIdentifier " + nodeIdentifier + ":");
+            for (String fileIdentifier : record.fileIdentifiers()) {
+                System.out.println(fileIdentifier);
+            }
+        } else {
+            System.out.println("No record found for nodeIdentifier: " + nodeIdentifier);
+        }
+    }
+
+
 
     public void removeMappingForId(String id) {
         // Check if the list associated with the id exists in the map
@@ -473,12 +553,15 @@ public class ChordNode {
         }
     }
 
+    // this will be called each time a file is sent to the chord network, since it has to be replicated
     public void storeFileInChord(String key, byte[] fileContent) {
         Runnable task = () -> {
             // Hash the key to find the node responsible for storing the file
             String keyId = hashNode(key);
             System.out.println("Key is: " + key + " and keyId is: " + keyId);
 
+            // depth specified here is 1 less than the actual depth,
+            // due to how algorithm is implemented using recursion
             int maxDepth = 1;
 
             TreeBasedReplication treeReplication = new TreeBasedReplication(m);

@@ -351,6 +351,9 @@ public class ChordServiceImpl extends ChordImplBase {
                         diskFileStorage.close();
 
                         chordNode.addMapping(fileMetadata.getFileNameWithType(), fileMetadata.getAuthor());
+                        chordNode.addFileRecord(fileMetadata.getFileNameWithType(), fileMetadata.getAuthor());
+
+                        chordNode.printFileIdentifiersForNode("172.22.192.1:8001");
 
 
 
