@@ -50,7 +50,7 @@ public class ChordNode {
         this.currentHeader = new NodeHeader(ip, port, nodeId);
         this.diskFileStorage = new DiskFileStorage();
         this.loadBalancer = loadBalancer;
-        this.successorListSize = 5;
+        this.successorListSize = 2;
         this.successorList = new ArrayList<>(Collections.nCopies(successorListSize, null));
     }
 
@@ -241,22 +241,27 @@ public class ChordNode {
 
 
     public void updateSuccessorList() {
-        ChordClient successorClient = new ChordClient(successor.getIp(), Integer.parseInt(successor.getPort()));
-        List<NodeHeader> successorSuccessorList = successorClient.getSuccessorList();
-        successorClient.shutdown();
+        try {
+            ChordClient successorClient = new ChordClient(successor.getIp(), Integer.parseInt(successor.getPort()));
+            List<NodeHeader> successorList = successorClient.getSuccessorList();
+            successorClient.shutdown();
 
-        // Ensure successorList has the correct size
-        while (successorList.size() < successorListSize) {
-            successorList.add(null);
-        }
-
-        successorList.set(0, successor);
-        for (int i = 1; i < successorListSize; i++) {
-            if (i - 1 < successorSuccessorList.size()) {
-                successorList.set(i, successorSuccessorList.get(i - 1));
-            } else {
-                successorList.set(i, null);
+            List<NodeHeader> successorSuccessorList = new ArrayList<>();
+            for (NodeHeader nodeInfo : successorList) {
+                successorSuccessorList.add(new NodeHeader(nodeInfo.getIp(), Integer.parseInt(nodeInfo.getPort()), nodeInfo.getNodeId()));
             }
+
+            // Update the successor list
+            successorList.set(0, successor);
+            for (int i = 1; i < successorListSize; i++) {
+                if (i - 1 < successorSuccessorList.size()) {
+                    successorList.set(i, successorSuccessorList.get(i - 1));
+                } else {
+                    successorList.set(i, null);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to update successor list: " + e.getMessage());
         }
     }
 
@@ -264,63 +269,123 @@ public class ChordNode {
 
     // Method to find the successor of a given ID
     public NodeHeader findSuccessor(String id) {
-        NodeHeader predecessorNode = findPredecessor(id);
-        NodeHeader successorNode = null;
-        int attempts = 0;
+        NodeHeader n = this.currentHeader;
 
-        while (attempts < successorListSize) {
-            try {
-                ChordClient predecessorClient = new ChordClient(predecessorNode.getIp(), Integer.parseInt(predecessorNode.getPort()));
-                successorNode = predecessorClient.getSuccessor();
-                predecessorClient.shutdown();
-                break;
-            } catch (Exception e) {
+        while (true){
+            NodeHeader nSuccessor;
+            if (n.equals(this.currentHeader)) {
+                nSuccessor = this.getSuccessor();
+            } else {
+                try {
+                    ChordClient nClient = new ChordClient(n.getIp(), Integer.parseInt(n.getPort()));
+                    nSuccessor = nClient.getSuccessor();
+                    nClient.shutdown();
+                } catch (Exception e) {
+                    System.err.println("Unexpected error in findSuccessor(): " + e.getMessage());
+                    n = findNextAliveNode(n);
+                    continue;
+                }
+            }
 
-                attempts++;
-                if (attempts < successorListSize && successorList.get(attempts) != null) {
-                    predecessorNode = successorList.get(attempts);
+            if(isInIntervalOpenClosed(id, n.getNodeId(), nSuccessor.getNodeId())){
+                return nSuccessor;
+            } else {
+                NodeHeader closestFinger;
+                if (n.equals(this.currentHeader)) {
+                    closestFinger = this.closestPrecedingFinger(id);
                 } else {
-                    throw new RuntimeException("Failed to find successor for ID: " + id);
+                    try {
+                        ChordClient nClient = new ChordClient(n.getIp(), Integer.parseInt(n.getPort()));
+                        closestFinger = nClient.closestPrecedingFinger(id);
+                        nClient.shutdown();
+                    } catch (Exception e) {
+                        System.err.println("Unexpected error in findSuccessor(): " + e.getMessage());
+                        n = findNextAliveNode(n);
+                        continue;
+                    }
+                }
+
+                if (closestFinger.equals(n)) {
+                    return nSuccessor;
+                } else {
+                    n = closestFinger;
                 }
             }
         }
+    }
 
-        return successorNode;
+
+    private NodeHeader findNextAliveNode(NodeHeader failedNode) {
+        // Check the successor list
+        for (NodeHeader node : successorList) {
+            if (node != null && !node.equals(failedNode) && isNodeAlive(node)) {
+                return node;
+            }
+        }
+        // Check the finger table
+        for (NodeHeader finger : fingerTable.getFingers()) {
+            if (finger != null && !finger.equals(failedNode) && isNodeAlive(finger)) {
+                return finger;
+            }
+        }
+        // Return self if no alive nodes found
+        return currentHeader;
+    }
+
+    private boolean isNodeAlive(NodeHeader node) {
+        try {
+            ChordClient client = new ChordClient(node.getIp(), Integer.parseInt(node.getPort()));
+            client.ping();
+            client.shutdown();
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
 
     // Method to find the predecessor of a given ID
-    // Method to find the predecessor of a given ID
     public NodeHeader findPredecessor(String id) {
-        NodeHeader nPrime = this.currentHeader;
+        NodeHeader n = this.currentHeader;
 
         while (true) {
-            NodeHeader nPrimeSuccessor;
-
-            if (nPrime.equals(this.currentHeader)) {
-                nPrimeSuccessor = this.getSuccessor();
+            NodeHeader nSuccessor;
+            if (n.equals(this.currentHeader)) {
+                nSuccessor = this.getSuccessor();
             } else {
-                ChordClient nPrimeClient = new ChordClient(nPrime.getIp(), Integer.parseInt(nPrime.getPort()));
-                nPrimeSuccessor = nPrimeClient.getSuccessor();
-                nPrimeClient.shutdown();
+                try {
+                    ChordClient client = new ChordClient(n.getIp(), Integer.parseInt(n.getPort()));
+                    nSuccessor = client.getSuccessor();
+                    client.shutdown();
+                } catch (Exception e) {
+                    System.err.println("Unexpected error in findPredecessor(): " + e.getMessage());
+                    n = findNextAliveNode(n);
+                    continue;
+                }
             }
 
-            if (isInIntervalOpenClosed(id, nPrime.getNodeId(), nPrimeSuccessor.getNodeId())) {
-                return nPrime;
+            if (isInIntervalOpenClosed(id, n.getNodeId(), nSuccessor.getNodeId())) {
+                return n;
             } else {
                 NodeHeader closestFinger;
-                if (nPrime.equals(this.currentHeader)) {
+                if (n.equals(this.currentHeader)) {
                     closestFinger = this.closestPrecedingFinger(id);
                 } else {
-                    ChordClient nPrimeClient = new ChordClient(nPrime.getIp(), Integer.parseInt(nPrime.getPort()));
-                    closestFinger = nPrimeClient.closestPrecedingFinger(id);
-                    nPrimeClient.shutdown();
+                    try {
+                        ChordClient client = new ChordClient(n.getIp(), Integer.parseInt(n.getPort()));
+                        closestFinger = client.closestPrecedingFinger(id);
+                        client.shutdown();
+                    } catch (Exception e) {
+                        System.err.println("Unexpected error in findPredecessor(): " + e.getMessage());
+                        n = findNextAliveNode(n);
+                        continue;
+                    }
                 }
 
-                if (closestFinger.equals(nPrime)) {
-                    return nPrime;
+                if (closestFinger.equals(n)) {
+                    return n;
                 } else {
-                    nPrime = closestFinger;
+                    n = closestFinger;
                 }
             }
         }
@@ -364,34 +429,19 @@ public class ChordNode {
 
 
     private void handleFailedSuccessor() {
-        printSuccessorList();
-        if (this.successor.equals(this.currentHeader)) {
-            return;
+        System.err.println("Successor node failed. Attempting to find a new successor." +
+                " Current successor: " + successor.getIp() + ":" + successor.getPort());
+
+        successorList.remove(0);
+
+        if (successorList.isEmpty()){
+            successor = this.currentHeader;
+            successorList.add(successor);
+        }else {
+            successor = successorList.get(0);
         }
 
-        // Mark the current successor as failed
-        if (!successorList.isEmpty()) {
-            successorList.set(0, null);
-        }
-
-        // Find the next available successor
-        NodeHeader nextSuccessor = null;
-        for (NodeHeader node : successorList) {
-            if (node != null && !node.equals(currentHeader)) {
-                nextSuccessor = node;
-                break;
-            }
-        }
-
-        if (nextSuccessor != null) {
-            successor = nextSuccessor;
-        } else {
-            successor = currentHeader;
-        }
-
-        // Update the successor list
         updateSuccessorList();
-        printSuccessorList();
     }
 
 
