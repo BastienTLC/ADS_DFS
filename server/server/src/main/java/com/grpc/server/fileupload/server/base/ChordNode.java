@@ -486,24 +486,101 @@ public class ChordNode {
         return this.currentHeader;
     }
 
+    public NodeHeader lookupNodeHeaderById(String id) {
+        for (int i = m - 1; i >= 0; i--) {
+            NodeHeader fingerNode = fingerTable.getFingers().get(i);
+            if (fingerNode != null && isInIntervalClosedOpen(id, this.nodeId, fingerNode.getNodeId())) {
+                return fingerNode;
+            }
+        }
+        return this.currentHeader;
+    }
+
+    public NodeHeader getSuccessorOfSuccessor(NodeHeader successor) {
+        // Get the node ID of the successor
+        String nextSuccessorId = successor.getNodeId();
+
+        // Convert the node ID to an integer
+        int currentValue = Integer.parseInt(nextSuccessorId);
+
+        // Calculate the next value in the ring
+        int maxValue = (int) Math.pow(2, m) - 1;
+        int nextValue = (currentValue + 1) % (maxValue + 1);
+
+        // Find the successor of the next value
+        NodeHeader successorOfSuccessor = lookupNodeHeaderById(String.valueOf(nextValue));
+
+        // Check if the successor of the successor is the same as the current node
+        if (successorOfSuccessor.equals(this.currentHeader)) {
+            return this.currentHeader;
+        }
+
+
+        return successorOfSuccessor;
+    }
+
+
     // Method to stabilize the node
     public void stabilize() {
-        final String successorIp = successor.getIp();
-        final int successorPort = Integer.parseInt(successor.getPort());
-
         Runnable task = () -> {
-            ChordClient successorClient = new ChordClient(successorIp, successorPort);
-            NodeHeader x = successorClient.getPredecessor();
+            ChordClient successorClient = new ChordClient(successor.getIp(), Integer.parseInt(successor.getPort()));
+            try {
+                NodeHeader x = successorClient.getPredecessor();
 
-            if (x != null && isInIntervalOpenOpen(x.getNodeId(), this.nodeId, successor.getNodeId())) {
-                this.successor = x;
+                if (x != null && isInIntervalOpenOpen(x.getNodeId(), this.nodeId, successor.getNodeId()) && !x.equals(this.currentHeader)) {
+                    this.successor = x;
+                }
+
+                successorClient.notify(this.currentHeader);
+            } catch (Exception e) {
+                System.err.println("Unexpected error in stabilize(): " + e.getMessage());
+                handleFailedSuccessor();
+            } finally {
+                successorClient.shutdown();
             }
-
-            successorClient.notify(this.currentHeader);
-            successorClient.shutdown();
         };
 
         executeGrpcCall(task);
+    }
+
+    private void handleFailedSuccessor() {
+        System.err.println("Successor node failed. Attempting to find a new successor." +
+                " Current successor: " + successor.getIp() + ":" + successor.getPort());
+        System.out.println("Attempting to find a new successor..." + getSuccessorOfSuccessor(successor).getIp() + ":" + getSuccessorOfSuccessor(successor).getPort());
+        NodeHeader newSuccessor = getSuccessorOfSuccessor(successor);
+        ChordClient newSuccessorClient = new ChordClient(newSuccessor.getIp(), Integer.parseInt(newSuccessor.getPort()));
+        try {
+            NodeHeader x = newSuccessorClient.getPredecessor();
+            if (!Objects.equals(x.getNodeId(), this.successor.getNodeId())) {
+                newSuccessorClient.setPredecessor(this.currentHeader);
+                this.successor = newSuccessor;
+                System.out.println("New successor found: " + this.successor.getIp() + ":" + this.successor.getPort());
+            } else {
+                this.successor = x;
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to find a new successor. Current node is the only node in the network.");
+        } finally {
+            newSuccessorClient.shutdown();
+        }
+    }
+
+    //checkpredecessor
+    public void checkPredecessor() {
+        if (this.predecessor != null) {
+            ChordClient predecessorClient = new ChordClient(predecessor.getIp(), Integer.parseInt(predecessor.getPort()));
+            try {
+                predecessorClient.getSuccessor();
+            } catch (Exception e) {
+                System.err.println("Predecessor node failed. Setting predecessor to null.");
+                this.predecessor = null;
+            } finally {
+                if (predecessorClient != null) {
+                    predecessorClient.shutdown();
+                }
+            }
+            //System.out.println("Predecessor is: " + this.predecessor.getIp() + ":" + this.predecessor.getPort());
+        }
     }
 
     // Method to notify a node
