@@ -302,6 +302,10 @@ public class ChordServiceImpl extends ChordImplBase {
         // this will safely remove mappings we no longer need
         idsToRemove.forEach(chordNode::removeMappingForId);
 
+        // removing the replication entries in map we no longer need to track
+        // have not yet fully verified this is done
+        idsToRemove.forEach(chordNode::removeReplicationMappingForId);
+
         // signalling that all files have been sent
         responseObserver.onCompleted();
     }
