@@ -200,14 +200,16 @@ public class ChordNode {
                 // retrieving or initialize the record for this node
                 List<String> fileIdentifiers = nodeReplicationMap.getOrDefault(nodeIdentifier, new ArrayList<>());
 
-                // Add the new file identifier to the list
-                fileIdentifiers.add(fileIdentifier);
+                if (!fileIdentifiers.contains(fileIdentifier)) {
+                    // Add the new file identifier to the list
+                    fileIdentifiers.add(fileIdentifier);
 
-                // Update the map with the modified list
-                nodeReplicationMap.put(nodeIdentifier, fileIdentifiers);
+                    // Update the map with the modified list
+                    nodeReplicationMap.put(nodeIdentifier, fileIdentifiers);
 
-                System.out.println("addFileRecord() called, added '" + nodeIdentifier +
-                        "' -> '" + fileIdentifier + "' mapping in the nodeReplicationMap!");
+                    System.out.println("addFileRecord() called, added '" + nodeIdentifier +
+                            "' -> '" + fileIdentifier + "' mapping in the nodeReplicationMap!");
+                }
             }
         }
     }
