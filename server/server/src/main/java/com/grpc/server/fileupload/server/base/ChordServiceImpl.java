@@ -18,6 +18,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
+import java.util.stream.Collectors;
 
 import com.grpc.server.fileupload.server.types.NodeHeader;
 import io.grpc.Status;
@@ -217,12 +218,14 @@ public class ChordServiceImpl extends ChordImplBase {
         String startHash = request.getStartHash();  // Get startHash from the request
         String endHash = request.getEndHash();      // Get endHash from the request
 
-        // Fetch the files within the specified hash range
+        // Fetch the files within the specified hash range which will be transferred/removed
         Map<String, List<String>> filesInRange = chordNode.getFilesInRange(startHash, endHash);
+        System.out.println("Preparing to transfer the files for range: " + startHash + "-" + endHash + "...");
+        chordNode.printFilesInRange(startHash, endHash);
 
         // so if it transfers files in directory 21, 22, 23 etc it will remove them
         List<String> idsToRemove = new ArrayList<>();
-        List<Path> filesToDelete = new ArrayList<>();
+        List<String> filesToDelete = new ArrayList<>();
 
         // Loop through the files in the range and retrieve them one by one
         filesInRange.forEach((hash, fileKeys) -> {
@@ -264,10 +267,12 @@ public class ChordServiceImpl extends ChordImplBase {
 
 
                     if (!idsToRemove.contains(hash)) {
+                        System.out.println("The mappings related to id: " + hash + " will be removed");
                         idsToRemove.add(hash);
                     }
 
-                    filesToDelete.add(path);
+                    // Later we check and remove this file from the node if no mappings to it remain
+                    filesToDelete.add(fileKey);
 
 
                 } catch (IOException e) {
@@ -280,27 +285,41 @@ public class ChordServiceImpl extends ChordImplBase {
         });
 
 
-        // deleting all files that we sent away (and the directory they are in if they are now empty)
-        filesToDelete.forEach(file -> {
-            try {
-                System.out.println("Deleting file: " + file);
-                Files.deleteIfExists(file);
-
-                // Check if the parent directory is empty after file deletion
-                Path parentDir = file.getParent();
-                if (Files.isDirectory(parentDir) && Files.list(parentDir).count() == 0) {
-                    Files.deleteIfExists(parentDir);
-                    System.out.println("Deleted empty directory: " + parentDir);
-                }
-
-            } catch (IOException e) {
-                System.err.println("Failed to delete file or directory: " + file + " - " + e.getMessage());
-            }
-        });
-
-
         // this will safely remove mappings we no longer need
         idsToRemove.forEach(chordNode::removeMappingForId);
+
+        // deleting all files that we sent away (and the directory they are in if they are now empty)
+        filesToDelete.forEach(fileIdentifier -> {
+            if (chordNode.checkMappingForFileIdentifier(fileIdentifier)) {
+                System.out.println("File: " + fileIdentifier + " will not be deleted since it still exists in the mapping");
+            }
+            else {
+                String[] fileDetails = fileIdentifier.split(":");
+                String filename = fileDetails[0];
+                String username = fileDetails[1];
+
+                // Build the file path based on the filename and requester
+                String filePath = "output/" + this.chordNode.getNodeId() + "/" + username + "/" + filename;
+                try {
+                    Path path = Paths.get(filePath);
+
+                    System.out.println("Deleting file: " + path);
+
+                    Files.deleteIfExists(path);
+
+                    // Check if the parent directory is empty after file deletion
+                    Path parentDir = path.getParent();
+                    if (Files.isDirectory(parentDir) && Files.list(parentDir).count() == 0) {
+                        Files.deleteIfExists(parentDir);
+                        System.out.println("Deleted empty directory: " + parentDir);
+                    }
+
+                } catch (IOException e) {
+                    System.err.println("Failed to delete file or directory: ");
+                }
+            }
+
+        });
 
         // removing the replication entries in map we no longer need to track
         // have not yet fully verified this is done
@@ -312,15 +331,39 @@ public class ChordServiceImpl extends ChordImplBase {
 
 
 
+    public void storeFileMappings(FileMappingRequest request, StreamObserver<Empty> responseObserver) {
+        // Extract the mappings from the request
+        Map<String, StringList> mappings = request.getFileMappingMap().getMappingsMap();
+
+        // Process the received data (example)
+        System.out.println("Received the fileMap (stored as predecessorReplicationMap) from the predecessor, \n" +
+                "in case it crashes and this node will take over its interval:");
+        mappings.forEach((key, value) -> {
+            System.out.println("Key: " + key + ", Values: " + value.getValuesList());
+        });
+
+        // Respond with an Empty message as per your proto definition
+        responseObserver.onNext(Empty.getDefaultInstance());
+        responseObserver.onCompleted();
+    }
+
+
+
     @Override
     public StreamObserver<FileUploadRequest> storeFile(StreamObserver<FileUploadResponse> responseObserver) {
         FileMetadata fileMetadata = Constants.fileMetaContext.get();
         DiskFileStorage diskFileStorage = new DiskFileStorage();
 
+        final String[] fileKey = {null};
+
         return new StreamObserver<>() {
             @Override
             // this method will write the bytes to the byte array stream that we have created in the diskFileStorage
             public void onNext(FileUploadRequest fileUploadRequest) {
+                if (fileKey[0] == null) {
+                    System.out.println("Setting key...");
+                    fileKey[0] = fileUploadRequest.getKey(); // Extract the key here
+                }
                 // called so we can compare that received data matches the data sent
                 System.out.println(String.format("received %d length of data", fileUploadRequest.getFile().getContent().size()));
                 try {
@@ -354,8 +397,12 @@ public class ChordServiceImpl extends ChordImplBase {
                         diskFileStorage.write(fileMetadata.getFileNameWithType(),fileMetadata.getAuthor(), chordNode.getNodeId());
                         diskFileStorage.close();
 
+                        if (fileKey[0] != null){
+                            System.out.println("Received the key: " + fileKey[0] + " in storeFile()");
+                        }
+
                         chordNode.addMapping(fileMetadata.getFileNameWithType(), fileMetadata.getAuthor());
-                        chordNode.addFileRecord(fileMetadata.getFileNameWithType(), fileMetadata.getAuthor());
+                        // chordNode.addFileRecord(fileMetadata.getFileNameWithType(), fileMetadata.getAuthor());
 
                         // chordNode.printFileIdentifiersForNode("172.22.192.1:8001");
 

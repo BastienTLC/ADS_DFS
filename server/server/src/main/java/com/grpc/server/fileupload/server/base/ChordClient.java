@@ -18,7 +18,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.CountDownLatch;
 
 import java.util.concurrent.CompletableFuture;
@@ -141,6 +143,36 @@ public class ChordClient {
     }
 
 
+    public void sendFileMappings(TreeMap<String, List<String>> predecessorFileMap) {
+        // Create a map builder to construct the request
+        FileMappingMap.Builder mapBuilder = FileMappingMap.newBuilder();
+
+        // Convert TreeMap to the proto format
+        for (Map.Entry<String, List<String>> entry : predecessorFileMap.entrySet()) {
+            StringList stringList = StringList.newBuilder()
+                    .addAllValues(entry.getValue())  // Add all values from the list to StringList
+                    .build();
+
+            // System.out.println("Adding entry to map: " + entry.getKey() + " -> " + entry.getValue());
+
+            mapBuilder.putMappings(entry.getKey(), stringList);  // Add the key-value pair to the map builder
+        }
+
+        FileMappingRequest request = FileMappingRequest.newBuilder()
+                .setFileMappingMap(mapBuilder)
+                .build();
+
+        // System.out.println("FileMappingRequest being sent: " + request);
+
+        // Send the request to the server
+        try {
+            blockingStub.storeFileMappings(request);  // sending our fileMappings to the successor
+            System.out.println("File mappings sent successfully to successor.");
+        } catch (Exception e) {
+            System.err.println("Failed to send file mappings: " + e.getMessage());
+        }
+    }
+
     public CompletableFuture<Boolean> retrieveFile(String key, String requester, StreamObserver<Fileupload.FileDownloadResponse> originalResponseObserver) {
         System.out.println("retrieveFile called");
 
@@ -195,7 +227,52 @@ public class ChordClient {
 
         stub.retrieveFile(request, responseObserver);
         return future;
+    }
 
+    public void retrieveCopyOfFile(String filename, String username) {
+        System.out.println("retrieveCopyOfFile called for file: " + filename + " and user: " + username);
+
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+
+        ChordGrpc.ChordStub stub = ChordGrpc.newStub(channel);
+
+        FileDownloadRequest request = FileDownloadRequest.newBuilder()
+                .setFileName(filename)
+                .setRequester(username)
+                .build();
+
+        StreamObserver<FileDownloadResponse> responseObserver = new StreamObserver<>() {
+            @Override
+            public void onNext(FileDownloadResponse fileDownloadResponse) {
+                System.out.println("Received file chunk for file: " + filename);
+                try {
+                    fileDownloadResponse.getFile().getContent().writeTo(byteArrayOutputStream);
+                } catch (IOException e) {
+                    System.err.println("Couldn't write data in retrieveCopyOfFile!");
+                    throw new RuntimeException(e);
+                }
+            }
+
+            @Override
+            public void onError(Throwable t) {
+                System.err.println("Failed to retrieve file: " + t.getMessage());
+                t.printStackTrace();
+            }
+
+            @Override
+            public void onCompleted() {
+                System.out.println("File download completed for: " + filename);
+
+                File finalFile = File.newBuilder()
+                        .setContent(ByteString.copyFrom(byteArrayOutputStream.toByteArray()))
+                        .setFileName(filename)
+                        .build();
+
+                System.out.println("File " + filename + " retrieved successfully for user " + username);
+            }
+        };
+
+        stub.retrieveFile(request, responseObserver);
     }
 
     public void deleteFile(String key, String requester, StreamObserver<com.google.protobuf.Empty> originalResponseObserver) {
@@ -263,8 +340,6 @@ public class ChordClient {
 
             @Override
             public void onCompleted() {
-                System.out.println("All files downloaded successfully. Writing files to disk...");
-
                 // writing each file to disk
                 inProgressFiles.forEach((fileKey, diskFileStorage) -> {
                     try {
@@ -276,16 +351,17 @@ public class ChordClient {
                         diskFileStorage.write(fileName, username, chordNode.getNodeId());
                         diskFileStorage.close();
 
-                        chordNode.addMapping(fileName, username);
+                        // below not needed since done since this is done in join() after this function has been called
+                        // chordNode.addMapping(fileName, username);
                     } catch (IOException e) {
                         System.err.println("Error writing file to disk for file: " + fileKey + " | " + e.getMessage());
                     }
                 });
 
+                System.out.println("Retrieval of files from successor has been successfully completed.");
+
                 // clearing map since all files have been stored
                 inProgressFiles.clear();
-
-                System.out.println("All files stored on disk successfully.");
             }
         };
 
@@ -295,6 +371,13 @@ public class ChordClient {
 
 
     public void storeFile(String key, byte[] fileContent) {
+        // This must be modified so that the key is included, because
+        // if we generated values 14, 22, 30, 42, it is important that the receiving node is
+        // aware that this is the id 42, and not hashNode(filename)=22, when storing the file
+        // this will make sending files much easier to other nodes upon/join leave
+        // upon being asked to retrieve file it must loop through the items its holding
+
+
         // Create the stub for FileUploadService
         System.out.println("storeFile called");
         ChordGrpc.ChordStub stub = ChordGrpc.newStub(channel);
@@ -348,8 +431,11 @@ public class ChordClient {
             while (offset < fileContent.length) {
                 int length = Math.min(chunkSize, fileContent.length - offset);
                 ByteString content = ByteString.copyFrom(fileContent, offset, length);
+                // we dont need to set username and filename since we are passing it with metadata
+                // however I added it to send nodeId, which is generated by the tree algorithm to know where to store
                 FileUploadRequest request = FileUploadRequest.newBuilder()
                         .setFile(File.newBuilder().setContent(content))
+                        .setKey(key) // new, now being passed for each upload
                         .build();
                 requestObserver.onNext(request);
                 offset += length;

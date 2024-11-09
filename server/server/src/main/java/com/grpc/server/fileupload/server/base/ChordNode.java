@@ -30,7 +30,10 @@ public class ChordNode {
     private final ExecutorService executorService;
     private final LoadBalancer loadBalancer;
     private TreeMap<String, List<String>> fileMap; // when node joins fill this tree with existing files
-    private Map<String, List<String>> nodeReplicationMap = new HashMap<>();
+    private TreeMap<String, List<String>> predecessorReplicationMap;
+
+
+    private Map<String, List<String>> nodeReplicationMap; // remove these later
 
     public ChordNode(String ip, int port, boolean multiThreadingEnabled, LoadBalancer loadBalancer, int m) {
         this.ip = ip;
@@ -48,7 +51,18 @@ public class ChordNode {
         this.fileStore = new FileStore();
         this.loadBalancer = loadBalancer;
         this.fileMap = new TreeMap<>();
-        this.nodeReplicationMap = new HashMap<>();
+        this.predecessorReplicationMap = new TreeMap<>(); // here copy of predecessors tree map will be stored
+
+        // TODO:
+        // 1. if the node crashes, the predecessorReplicationMap will be merged with fileMap (not implemented yet).
+        // 2. Then, the predecessorReplicationMap must be updated with the new predecessors replicationMap,
+        // Im thinking its the new predecessor that should be doing that, where in the setPredecessor() gRPC
+        // call it can pass its fileMap?
+
+        this.nodeReplicationMap = new HashMap<>(); // remove this later (currently part of addFileRecord no longer used)
+
+
+
     }
 
     // Function to hash the node ID based on IP and port
@@ -71,7 +85,51 @@ public class ChordNode {
     public NodeHeader getSuccessor() { return this.successor; }
     public void setSuccessor(NodeHeader successor) { this.successor = successor; }
     public NodeHeader getPredecessor() { return this.predecessor; }
-    public void setPredecessor(NodeHeader predecessor) { this.predecessor = predecessor; }
+    public void setPredecessor(NodeHeader predecessor) {
+        if (predecessor == null) {
+            System.out.println("Updating predecessor... Received null predecessor.");
+            this.predecessor = null;
+            return;
+        }
+
+        if (this.predecessor == null) {
+            System.out.println("New predecessor found: " + predecessor.getIp() + ":" + predecessor.getPort());
+            this.predecessor = predecessor;
+
+            for (Map.Entry<String, List<String>> entry : predecessorReplicationMap.entrySet()) {
+                String key = entry.getKey();
+                List<String> files = entry.getValue();
+
+                for (String file : files) {
+                    String[] fileDetails = file.split(":");
+                    String filename = fileDetails[0];
+                    String username = fileDetails[1];
+
+                    NodeHeader responsibleNode = findSuccessor(key);  // notice how key is only used to find the replica holding the file
+                    if (responsibleNode != null) {
+                        System.out.println("No responsible node found for key (should not be possible) " + key);
+                        continue;
+                    }
+
+
+                    ChordClient responsibleNodeClient = new ChordClient(responsibleNode.getIp(), Integer.parseInt(responsibleNode.getPort()));
+                    responsibleNodeClient.retrieveCopyOfFile(filename, username);
+                    responsibleNodeClient.shutdown();
+                }
+
+
+                // additionally we should probably check we don't already have these files stored, but for now we can
+                // maybe get them sent to us anyway
+
+                // also needs to update its predecessorReplicationMap with the new predecessors replicationMap
+
+            }
+        }
+        else{
+            this.predecessor = predecessor;
+        }
+    }
+
     public FingerTable getFingerTable() { return this.fingerTable; }
     public FileStore getMessageStore() { return this.fileStore; }
 
@@ -96,19 +154,26 @@ public class ChordNode {
         //call loadbalancer to register the node (ip, port)
         loadBalancer.registerNode(this.ip, this.port);
 
-        // condition so that the bootstrap node wont enter
+        // condition so that the bootstrap node won't enter
         if (!isBootstrap) {
             // this will get the data transferred to us from the successor
             // I think it will simply overwrite existing files if we have them already
             ChordClient successorClient = new ChordClient(this.successor.getIp(), Integer.parseInt(this.successor.getPort()));
 
             String[] span = getResponsibleSpan();
+
+            // this is the span that the joining node will be responsible for
             successorClient.retrieveFiles(span[0], span[1], this); // not fully handling the wrap around case here yet
             successorClient.shutdown();
         }
 
         // looping through the directory where files are stored and adding mapping
         // we are doing this after having gotten the files from successor
+        // for each mapping a tree is constructed, since for small number of nodes sometimes we will be responsible for 2 replicas
+        // the id used for mapping is the id that was generated using the tree algorithm, and not from hashNode(filename)
+
+        // this also means that we will need to have so that before deleting files when performing transferring
+        // it need to construct a tree to check if it should still keep track of that node
         addMappingForExistingFiles();
 
         printFingerTable();
@@ -164,16 +229,51 @@ public class ChordNode {
         System.out.println();
     }
 
-    // key is filename:username, value is key generated from the filename
+    // in the map key is the id used when replicating, value is a list of filename:username
+    // the span is a calculated wrong somewhere in regards to <=, since 25 can be stored on two nodes at once for example
     public void addMapping(String filename, String username){
         String id = hashNode(filename);
         String value = filename + ":" + username;
 
-        // could potentially add logic here so that user can store files with same name
-        // but it's a realistic limitation to only allow same user to store files of different names
-        fileMap.computeIfAbsent(id, k -> new ArrayList<>()).add(value);
+        int maxDepth = 1; // this is the depth it will be doing replication for, so actual depth of tree is 2
+        TreeBasedReplication treeReplication = new TreeBasedReplication(m);
+        Map<Integer, List<Integer>> replicaTree = treeReplication.generateReplicaTree(Integer.parseInt(id), maxDepth);
+        List<Integer> leafNodes = treeReplication.getLeafNodes(replicaTree);
 
-        System.out.println("addMapping() called, id: " + id + " is now mapped to the value: " + value);
+
+        String[] span = getResponsibleSpan();
+        int spanStart = Integer.parseInt(span[0]);
+        int spanEnd = Integer.parseInt(span[1]);
+        System.out.println("Adding mapping for " + value + ", spanStart: " + spanStart + " spanEnd: " + spanEnd);
+        int maxId = (int) Math.pow(2, m) - 1; // so for m =6 max is 63
+
+        for (Integer replicaKey : leafNodes) {
+            // Case 1: No wraparound (e.g., spanStart = 10, spanEnd = 40)
+            if (spanStart <= spanEnd) {
+                if (replicaKey >= spanStart && replicaKey <= spanEnd) {
+                    // replicaKey is within span
+                    System.out.println("Replica " + replicaKey + " has been added to the fileMap");
+                    fileMap.computeIfAbsent(String.valueOf(replicaKey), k -> new ArrayList<>()).add(value);
+                }
+            }
+            // Case 2: Wraparound (e.g., spanStart = 40, spanEnd = 20)
+            else {
+                if ((replicaKey >= spanStart && replicaKey <= maxId) || (replicaKey >= 0 && replicaKey <= spanEnd)) {
+                    // replicaKey is within span
+                    fileMap.computeIfAbsent(String.valueOf(replicaKey), k -> new ArrayList<>()).add(value);
+                    System.out.println("Replica " + replicaKey + " has been added to the fileMap");
+                }
+            }
+        }
+
+        if (this.successor != null) {
+            if (successor.getIp() != this.getIp() || Integer.parseInt(successor.getPort()) != this.getPort()){
+                System.out.println("Sending the updated fileMap to successor...");
+                ChordClient successorClient = new ChordClient(successor.getIp(), Integer.parseInt(successor.getPort()));
+                successorClient.sendFileMappings(this.fileMap);
+                successorClient.shutdown();
+            }
+        }
     }
 
 
@@ -212,6 +312,23 @@ public class ChordNode {
                 }
             }
         }
+
+        // commented this out for now not sure we will be keeping it
+//        System.out.println("Sending the updated replicationMap to successor...");
+//        ChordClient successorClient = new ChordClient(successor.getIp(), Integer.parseInt(successor.getPort()));
+//        successorClient.sendReplicationMapCopy(this.nodeReplicationMap);
+//        successorClient.shutdown();
+    }
+
+
+    public synchronized void updatePredecessorReplicationMap(Map<String, List<String>> newMap) {
+        this.predecessorReplicationMap.clear();
+        this.predecessorReplicationMap.putAll(newMap);
+        System.out.println("Updated predecessorReplicationMap!");
+    }
+
+    public synchronized Map<String, List<String>> getPredecessorReplicationMap() {
+        return new HashMap<>(this.predecessorReplicationMap);
     }
 
     // Two utility functions related to managing records
@@ -241,7 +358,7 @@ public class ChordNode {
     }
 
 
-
+    // id in this case is the id that was generated from replication tree
     public void removeMappingForId(String id) {
         // Check if the list associated with the id exists in the map
         if (fileMap.containsKey(id) && fileMap.get(id) != null && !fileMap.get(id).isEmpty()) {
@@ -249,12 +366,23 @@ public class ChordNode {
             fileMap.remove(id);
             System.out.println("removeMappingForId() called, removed entire mapping for id: " + id);
         } else {
-            // If no mappings exist for this id, log a message
             System.out.println("No mapping found for id: " + id);
         }
     }
 
+    // we check if for example filename:user exists in mapping
+    public boolean checkMappingForFileIdentifier(String identifier) {
+        for (Map.Entry<String, List<String>> entry : fileMap.entrySet()) {
+            List<String> filesList = entry.getValue();
 
+            if (filesList.contains(identifier)) {
+                return true;
+            }
+        }
+        return false; // not found
+    }
+
+    // id in this case is filename:username
     public void removeReplicationMappingForId(String id) {
         for (Map.Entry<String, List<String>> entry : nodeReplicationMap.entrySet()) {
             List<String> fileIdentifiers = entry.getValue();
@@ -316,17 +444,33 @@ public class ChordNode {
 
             for (File file : files) {
                 String filename = file.getName();
-                addMapping(filename, username); // adding mapping for each file
-                addFileRecord(filename, username); // populating nodeReplicationMap to keep track of the replicas
+                addMapping(filename, username); // adding mapping for each file, this will also send copy to successor of our fileMap
+                // addFileRecord (filename, username); <-- this will no longer be used
             }
         }
 
-        System.out.println("All existing files have been mapped.");
+        System.out.println("All currently existing files have been mapped.");
     }
 
     // 99% sure this needs to be rewritten, since if starthash = 40, endHash = 10, it won't find it properly
+    // have not fully debugged this
     public Map<String, List<String>> getFilesInRange(String startHash, String endHash) {
-        return fileMap.subMap(startHash, true, endHash, true);
+        Map<String, List<String>> filesInRange = new HashMap<>();
+        NavigableMap<String, List<String>> navigableFileMap = new TreeMap<>(fileMap);
+
+        // Case 1: Normal range (startHash <= endHash)
+        if (startHash.compareTo(endHash) <= 0) {
+            filesInRange.putAll(navigableFileMap.subMap(startHash, true, endHash, true));
+        }
+        // Case 2: Wraparound range (startHash > endHash)
+        else {
+            // Part 1: From startHash to the highest key in the map
+            filesInRange.putAll(navigableFileMap.tailMap(startHash, true));
+
+            // Part 2: From the lowest key in the map to endHash
+            filesInRange.putAll(navigableFileMap.headMap(endHash, true));
+        }
+        return filesInRange;
     }
 
 //    public Map<String, List<String>> getFilesInRange(String startHash, String endHash) {
@@ -564,6 +708,9 @@ public class ChordNode {
         System.err.println("Successor node failed. Attempting to find a new successor." +
                 " Current successor: " + successor.getIp() + ":" + successor.getPort());
         System.out.println("Attempting to find a new successor..." + getSuccessorOfSuccessor(successor).getIp() + ":" + getSuccessorOfSuccessor(successor).getPort());
+        // shutting down old successorClient channel
+
+
         // Find a new successor
         NodeHeader newSuccessor = getSuccessorOfSuccessor(successor);
         ChordClient newSuccessorClient = new ChordClient(newSuccessor.getIp(), Integer.parseInt(newSuccessor.getPort()));
@@ -687,6 +834,7 @@ public class ChordNode {
                             + ") found, responsible for key: " + replicaKey);
                     ChordClient responsibleNodeClient = new ChordClient(responsibleNode.getIp(), Integer.parseInt(responsibleNode.getPort()));
 
+                    // this replicaKey was previously never used, which it is now when creating the mapping
                     responsibleNodeClient.storeFile(String.valueOf(replicaKey), fileContent);
                     responsibleNodeClient.shutdown();
                 }
