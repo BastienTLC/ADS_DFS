@@ -163,7 +163,15 @@ public class ChordNode {
             String[] span = getResponsibleSpan();
 
             // this is the span that the joining node will be responsible for
-            successorClient.retrieveFiles(span[0], span[1], this); // not fully handling the wrap around case here yet
+            System.out.println("Span: " + span[0] + " - " + span[1]);
+
+            if (isWrappedAround()) {
+                successorClient.retrieveFiles(span[0], String.valueOf((int)Math.pow(2, m) - 1), this);
+                successorClient.retrieveFiles("0", span[1], this);
+            } else {
+                successorClient.retrieveFiles(span[0], span[1], this);
+            }
+
             successorClient.shutdown();
         }
 
@@ -178,6 +186,20 @@ public class ChordNode {
 
         printFingerTable();
         printResponsibleSpan();
+    }
+
+    private boolean isWrappedAround() {
+        if (predecessor == null) return false;
+        int predId = Integer.parseInt(predecessor.getNodeId());
+        int currentId = Integer.parseInt(nodeId);
+        int succId = Integer.parseInt(successor.getNodeId());
+
+        // special case when inserting between the last and first node
+        if (predId > succId) {
+            return currentId < succId || currentId > predId;
+        }
+
+        return predId >= currentId;
     }
 
     public void printResponsibleSpan() {
@@ -705,8 +727,6 @@ public class ChordNode {
     }
 
     private void handleFailedSuccessor() {
-        System.err.println("Successor node failed. Attempting to find a new successor." +
-                " Current successor: " + successor.getIp() + ":" + successor.getPort());
         System.out.println("Attempting to find a new successor..." + getSuccessorOfSuccessor(successor).getIp() + ":" + getSuccessorOfSuccessor(successor).getPort());
         // shutting down old successorClient channel
 
