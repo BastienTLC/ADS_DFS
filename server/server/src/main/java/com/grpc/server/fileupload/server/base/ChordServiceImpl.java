@@ -213,7 +213,6 @@ public class ChordServiceImpl extends ChordImplBase {
     }
 
 
-    // using FileDownloadResponse not FileDownloadListResponse CURRENTLY!
     public void retrieveFilesForSpan(FileRangeRequest request, StreamObserver<FileDownloadResponse> responseObserver) {
         String startHash = request.getStartHash();  // Get startHash from the request
         String endHash = request.getEndHash();      // Get endHash from the request
@@ -288,6 +287,8 @@ public class ChordServiceImpl extends ChordImplBase {
         // this will safely remove mappings we no longer need
         idsToRemove.forEach(chordNode::removeMappingForId);
 
+        // TODO: make sure that the predecessorReplicationMap is updated somewhere
+
         // deleting all files that we sent away (and the directory they are in if they are now empty)
         filesToDelete.forEach(fileIdentifier -> {
             if (chordNode.checkMappingForFileIdentifier(fileIdentifier)) {
@@ -321,9 +322,6 @@ public class ChordServiceImpl extends ChordImplBase {
 
         });
 
-        // removing the replication entries in map we no longer need to track
-        // have not yet fully verified this is done
-        idsToRemove.forEach(chordNode::removeReplicationMappingForId);
 
         // signalling that all files have been sent
         responseObserver.onCompleted();
@@ -402,12 +400,6 @@ public class ChordServiceImpl extends ChordImplBase {
                         }
 
                         chordNode.addMapping(fileMetadata.getFileNameWithType(), fileMetadata.getAuthor());
-                        // chordNode.addFileRecord(fileMetadata.getFileNameWithType(), fileMetadata.getAuthor());
-
-                        // chordNode.printFileIdentifiersForNode("172.22.192.1:8001");
-
-
-
                     } else {
                         // notifying the client with error
                         responseObserver.onError(

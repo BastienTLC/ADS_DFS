@@ -33,7 +33,7 @@ public class ChordNode {
     private TreeMap<String, List<String>> predecessorReplicationMap;
 
 
-    private Map<String, List<String>> nodeReplicationMap; // remove these later
+    // private Map<String, List<String>> nodeReplicationMap; // remove these later
 
     public ChordNode(String ip, int port, boolean multiThreadingEnabled, LoadBalancer loadBalancer, int m) {
         this.ip = ip;
@@ -59,8 +59,7 @@ public class ChordNode {
         // Im thinking its the new predecessor that should be doing that, where in the setPredecessor() gRPC
         // call it can pass its fileMap?
 
-        this.nodeReplicationMap = new HashMap<>(); // remove this later (currently part of addFileRecord no longer used)
-
+        // this.nodeReplicationMap = new HashMap<>(); // remove this later (currently part of addFileRecord no longer used)
 
 
     }
@@ -95,6 +94,8 @@ public class ChordNode {
         if (this.predecessor == null) {
             System.out.println("New predecessor found: " + predecessor.getIp() + ":" + predecessor.getPort());
             this.predecessor = predecessor;
+
+
 
             for (Map.Entry<String, List<String>> entry : predecessorReplicationMap.entrySet()) {
                 String key = entry.getKey();
@@ -251,6 +252,26 @@ public class ChordNode {
         System.out.println();
     }
 
+
+    public void printFileMap() {
+        System.out.println("Printing fileMap of current node...");
+        for (Map.Entry<String, List<String>> entry : fileMap.entrySet()) {
+            String key = entry.getKey();
+            List<String> values = entry.getValue();
+
+            System.out.println("Key: " + key);
+
+            System.out.println("Values:");
+            if (values != null && !values.isEmpty()) {
+                for (String value : values) {
+                    System.out.println(" - " + value);
+                }
+            } else {
+                System.out.println(" - (No values)");
+            }
+        }
+    }
+
     // in the map key is the id used when replicating, value is a list of filename:username
     // the span is a calculated wrong somewhere in regards to <=, since 25 can be stored on two nodes at once for example
     public void addMapping(String filename, String username){
@@ -261,24 +282,31 @@ public class ChordNode {
         TreeBasedReplication treeReplication = new TreeBasedReplication(m);
         Map<Integer, List<Integer>> replicaTree = treeReplication.generateReplicaTree(Integer.parseInt(id), maxDepth);
         List<Integer> leafNodes = treeReplication.getLeafNodes(replicaTree);
+        System.out.println("Leaf nodes generated in addMapping: " + leafNodes);
 
 
         String[] span = getResponsibleSpan();
         int spanStart = Integer.parseInt(span[0]);
         int spanEnd = Integer.parseInt(span[1]);
-        System.out.println("Adding mapping for " + value + ", spanStart: " + spanStart + " spanEnd: " + spanEnd);
+        System.out.println("Adding mapping for " + value + ", based on which replicas fall into the span '" + spanStart + "-" + spanEnd + "'");
         int maxId = (int) Math.pow(2, m) - 1; // so for m =6 max is 63
 
         for (Integer replicaKey : leafNodes) {
-            // Case 1: No wraparound (e.g., spanStart = 10, spanEnd = 40)
-            if (spanStart <= spanEnd) {
+            // Case 1 : entire span is covered, for first node, 25-25 (this might break if node is only responsible for 1 id)
+            if (spanStart == spanEnd) {
+                System.out.println("Replica " + replicaKey + " has been added to the fileMap");
+                fileMap.computeIfAbsent(String.valueOf(replicaKey), k -> new ArrayList<>()).add(value);
+            }
+            // these two below have not been properly tested
+            // Case 2: No wraparound (e.g., spanStart = 10, spanEnd = 40)
+            else if (spanStart <= spanEnd) {
                 if (replicaKey >= spanStart && replicaKey <= spanEnd) {
                     // replicaKey is within span
                     System.out.println("Replica " + replicaKey + " has been added to the fileMap");
                     fileMap.computeIfAbsent(String.valueOf(replicaKey), k -> new ArrayList<>()).add(value);
                 }
             }
-            // Case 2: Wraparound (e.g., spanStart = 40, spanEnd = 20)
+            // Case 3: Wraparound (e.g., spanStart = 40, spanEnd = 20)
             else {
                 if ((replicaKey >= spanStart && replicaKey <= maxId) || (replicaKey >= 0 && replicaKey <= spanEnd)) {
                     // replicaKey is within span
@@ -298,51 +326,6 @@ public class ChordNode {
         }
     }
 
-
-    // This function is called in ChordServiceImpl each time a file is stored
-    // it essentially makes us able to keep track in which nodes all replicas are stored
-    public void addFileRecord(String filename, String username){
-        String id = hashNode(filename);
-        String fileIdentifier = filename + ":" + username;
-
-        // We create a tree to determine which nodes store a replica
-        int maxDepth = 1; // this is the depth it will be doing replication for, so actual depth of tree is 2
-        TreeBasedReplication treeReplication = new TreeBasedReplication(m);
-        Map<Integer, List<Integer>> replicaTree = treeReplication.generateReplicaTree(Integer.parseInt(id), maxDepth);
-        List<Integer> leafNodes = treeReplication.getLeafNodes(replicaTree);
-        // System.out.println("Leaf Nodes: " + leafNodes);
-
-        Set<String> storedNodeIdentifiers = new HashSet<>();
-
-        for (Integer replicaKey : leafNodes) {
-            NodeHeader responsibleNode = findSuccessor(replicaKey.toString());
-            String nodeIdentifier = responsibleNode.getIp() + ":" + responsibleNode.getPort();
-
-            if (storedNodeIdentifiers.add(nodeIdentifier)) {  // this returns false if already present
-                // retrieving or initialize the record for this node
-                List<String> fileIdentifiers = nodeReplicationMap.getOrDefault(nodeIdentifier, new ArrayList<>());
-
-                if (!fileIdentifiers.contains(fileIdentifier)) {
-                    // Add the new file identifier to the list
-                    fileIdentifiers.add(fileIdentifier);
-
-                    // Update the map with the modified list
-                    nodeReplicationMap.put(nodeIdentifier, fileIdentifiers);
-
-                    System.out.println("addFileRecord() called, added '" + nodeIdentifier +
-                            "' -> '" + fileIdentifier + "' mapping in the nodeReplicationMap!");
-                }
-            }
-        }
-
-        // commented this out for now not sure we will be keeping it
-//        System.out.println("Sending the updated replicationMap to successor...");
-//        ChordClient successorClient = new ChordClient(successor.getIp(), Integer.parseInt(successor.getPort()));
-//        successorClient.sendReplicationMapCopy(this.nodeReplicationMap);
-//        successorClient.shutdown();
-    }
-
-
     public synchronized void updatePredecessorReplicationMap(Map<String, List<String>> newMap) {
         this.predecessorReplicationMap.clear();
         this.predecessorReplicationMap.putAll(newMap);
@@ -357,27 +340,27 @@ public class ChordNode {
     // This will help us determine which nodes to replicate to if one is missing
     // If a Node joins, not sure if we simply should transfer the entire record of that node that is
     // no longer reachable, or calculate the tree again
-    public List<String> getFileIdentifiersForNode(String nodeIdentifier) {
-        List<String> fileIdentifiers = nodeReplicationMap.get(nodeIdentifier);
-        if (fileIdentifiers != null) {
-            return new ArrayList<>(fileIdentifiers); // Return a copy of the list to avoid external modification
-        } else {
-            System.out.println("No list found for nodeIdentifier: " + nodeIdentifier);
-            return Collections.emptyList();
-        }
-    }
-
-    public void printFileIdentifiersForNode(String nodeIdentifier) {
-        List<String> fileIdentifiers = nodeReplicationMap.get(nodeIdentifier);
-        if (fileIdentifiers != null) {
-            System.out.println("File identifiers associated with nodeIdentifier " + nodeIdentifier + ":");
-            for (String fileIdentifier : fileIdentifiers) {
-                System.out.println(fileIdentifier);
-            }
-        } else {
-            System.out.println("No list found for nodeIdentifier: " + nodeIdentifier);
-        }
-    }
+//    public List<String> getFileIdentifiersForNode(String nodeIdentifier) {
+//        List<String> fileIdentifiers = nodeReplicationMap.get(nodeIdentifier);
+//        if (fileIdentifiers != null) {
+//            return new ArrayList<>(fileIdentifiers); // Return a copy of the list to avoid external modification
+//        } else {
+//            System.out.println("No list found for nodeIdentifier: " + nodeIdentifier);
+//            return Collections.emptyList();
+//        }
+//    }
+//
+//    public void printFileIdentifiersForNode(String nodeIdentifier) {
+//        List<String> fileIdentifiers = nodeReplicationMap.get(nodeIdentifier);
+//        if (fileIdentifiers != null) {
+//            System.out.println("File identifiers associated with nodeIdentifier " + nodeIdentifier + ":");
+//            for (String fileIdentifier : fileIdentifiers) {
+//                System.out.println(fileIdentifier);
+//            }
+//        } else {
+//            System.out.println("No list found for nodeIdentifier: " + nodeIdentifier);
+//        }
+//    }
 
 
     // id in this case is the id that was generated from replication tree
@@ -403,38 +386,6 @@ public class ChordNode {
         }
         return false; // not found
     }
-
-    // id in this case is filename:username
-    public void removeReplicationMappingForId(String id) {
-        for (Map.Entry<String, List<String>> entry : nodeReplicationMap.entrySet()) {
-            List<String> fileIdentifiers = entry.getValue();
-
-            Iterator<String> iterator = fileIdentifiers.iterator();
-            while (iterator.hasNext()) {
-                String fileIdentifier = iterator.next();
-
-                // splitting the string to extract filename and username
-                String[] parts = fileIdentifier.split(":");
-                if (parts.length == 2) {
-                    String filename = parts[0];
-
-                    // hashing the filename to check against the given id
-                    String hashedId = hashNode(filename);
-
-                    // if the hash matches the id, remove the element
-                    if (hashedId.equals(id)) {
-                        iterator.remove();
-                        System.out.println("removeReplicationMappingForId() called, removed '" + fileIdentifier + "' from " + entry.getKey());
-                    }
-                }
-            }
-
-            if (fileIdentifiers.isEmpty()) {
-                nodeReplicationMap.remove(entry.getKey());
-            }
-        }
-    }
-
 
 
     void addMappingForExistingFiles() {
@@ -472,6 +423,7 @@ public class ChordNode {
         }
 
         System.out.println("All currently existing files have been mapped.");
+        printFileMap();
     }
 
     // 99% sure this needs to be rewritten, since if starthash = 40, endHash = 10, it won't find it properly
