@@ -15,9 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.List;
-import java.util.Map;
-import java.util.ArrayList;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import com.grpc.server.fileupload.server.types.NodeHeader;
@@ -213,6 +211,8 @@ public class ChordServiceImpl extends ChordImplBase {
     }
 
 
+    // New for this function is that we will never send same file twice to the joining, instead
+    // the nodes receiving the files will be able to map them itself by constructing a tree
     public void retrieveFilesForSpan(FileRangeRequest request, StreamObserver<FileDownloadResponse> responseObserver) {
         String startHash = request.getStartHash();  // Get startHash from the request
         String endHash = request.getEndHash();      // Get endHash from the request
@@ -225,6 +225,7 @@ public class ChordServiceImpl extends ChordImplBase {
         // so if it transfers files in directory 21, 22, 23 etc it will remove them
         List<String> idsToRemove = new ArrayList<>();
         List<String> filesToDelete = new ArrayList<>();
+        Set<String> filesSent = new HashSet<>(); // so we dont send file twice to same node
 
         // Loop through the files in the range and retrieve them one by one
         filesInRange.forEach((hash, fileKeys) -> {
@@ -236,6 +237,16 @@ public class ChordServiceImpl extends ChordImplBase {
                 // Build the file path based on the filename and requester
                 String filePath = "output/" + this.chordNode.getNodeId() + "/" + username + "/" + filename;
                 Path path = Paths.get(filePath);
+
+
+                if (filesSent.contains(fileKey)) {
+                    if (!idsToRemove.contains(hash)) {
+                        System.out.println("The mappings related to id: " + hash + " will be removed");
+                        idsToRemove.add(hash);
+                    }
+                    System.out.printf("Skipping sending a file already sent: %s%n", filename);
+                    return;
+                }
 
                 if (!Files.exists(path) || !Files.isRegularFile(path)) {
                     System.out.printf("File not found: %s%n", filename);
@@ -265,6 +276,9 @@ public class ChordServiceImpl extends ChordImplBase {
                     }
 
 
+                    filesSent.add(fileKey);
+
+
                     if (!idsToRemove.contains(hash)) {
                         System.out.println("The mappings related to id: " + hash + " will be removed");
                         idsToRemove.add(hash);
@@ -292,7 +306,7 @@ public class ChordServiceImpl extends ChordImplBase {
         // deleting all files that we sent away (and the directory they are in if they are now empty)
         filesToDelete.forEach(fileIdentifier -> {
             if (chordNode.checkMappingForFileIdentifier(fileIdentifier)) {
-                System.out.println("File: " + fileIdentifier + " will not be deleted since it still exists in the mapping");
+                System.out.println("File '" + fileIdentifier + "' will not be deleted since it still exists in the mapping");
             }
             else {
                 String[] fileDetails = fileIdentifier.split(":");
@@ -334,8 +348,7 @@ public class ChordServiceImpl extends ChordImplBase {
         Map<String, StringList> mappings = request.getFileMappingMap().getMappingsMap();
 
         // Process the received data (example)
-        System.out.println("Received the fileMap (stored as predecessorReplicationMap) from the predecessor, \n" +
-                "in case it crashes and this node will take over its interval:");
+        System.out.println("Received the fileMap from the predecessor");
         mappings.forEach((key, value) -> {
             System.out.println("Key: " + key + ", Values: " + value.getValuesList());
         });

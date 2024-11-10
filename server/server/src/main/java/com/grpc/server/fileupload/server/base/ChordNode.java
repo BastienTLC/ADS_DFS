@@ -183,6 +183,9 @@ public class ChordNode {
 
         // this also means that we will need to have so that before deleting files when performing transferring
         // it need to construct a tree to check if it should still keep track of that node
+
+        // Note that the mapping added upon join is added in client.retrieveFiles(),
+        // this is only for adding mapping for existing files
         addMappingForExistingFiles();
 
         printFingerTable();
@@ -279,10 +282,11 @@ public class ChordNode {
         String value = filename + ":" + username;
 
         int maxDepth = 1; // this is the depth it will be doing replication for, so actual depth of tree is 2
+        System.out.println("The ID of the filename used for generating the tree is: " + id);
         TreeBasedReplication treeReplication = new TreeBasedReplication(m);
         Map<Integer, List<Integer>> replicaTree = treeReplication.generateReplicaTree(Integer.parseInt(id), maxDepth);
         List<Integer> leafNodes = treeReplication.getLeafNodes(replicaTree);
-        System.out.println("Leaf nodes generated in addMapping: " + leafNodes);
+        System.out.println("Leaf nodes generated for the mapping: " + leafNodes);
 
 
         String[] span = getResponsibleSpan();
@@ -411,14 +415,14 @@ public class ChordNode {
             // iterating over each file in the user's directory
             File[] files = userDir.listFiles(File::isFile);
             if (files == null) {
-                // System.out.println("No files found for user: " + username);
+                System.out.println("No files found for user: " + username);
                 continue;
             }
 
             for (File file : files) {
                 String filename = file.getName();
+                System.out.println("Adding mapping for '" + filename + ":" + username + "'");
                 addMapping(filename, username); // adding mapping for each file, this will also send copy to successor of our fileMap
-                // addFileRecord (filename, username); <-- this will no longer be used
             }
         }
 

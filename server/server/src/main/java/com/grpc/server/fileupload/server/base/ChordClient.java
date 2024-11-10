@@ -343,6 +343,8 @@ public class ChordClient {
                 // writing each file to disk
                 inProgressFiles.forEach((fileKey, diskFileStorage) -> {
                     try {
+                        System.out.println("Received '" + fileKey + "', storing to disk...");
+
                         // Extract filename and username from fileKey
                         String[] fileDetails = fileKey.split(":");
                         String fileName = fileDetails[0];
@@ -351,8 +353,8 @@ public class ChordClient {
                         diskFileStorage.write(fileName, username, chordNode.getNodeId());
                         diskFileStorage.close();
 
-                        // below not needed since done since this is done in join() after this function has been called
-                        // chordNode.addMapping(fileName, username);
+                        // this needs to be called here, since the function called upon joining will only add mapping for existing files
+                        chordNode.addMapping(fileName, username);
                     } catch (IOException e) {
                         System.err.println("Error writing file to disk for file: " + fileKey + " | " + e.getMessage());
                     }
