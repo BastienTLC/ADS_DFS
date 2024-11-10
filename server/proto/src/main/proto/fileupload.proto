@@ -156,29 +156,10 @@ message FileStore {
   repeated File files = 1;
 }
 
-// used for re-replication
-message NodeReplicationMap {
-  repeated MapEntry entries = 1;
-}
-
-// used for re-replication
-message MapEntry {
-  string key = 1;
-  repeated string values = 2;
-}
-
-// New implementation of adding file mapping to successor, the two message types above probably will not be used
-message FileMappingList {
-  repeated string fileMappings = 1; // Each entry will be in the format "username:filename"
-}
-
-// -------------- Hopefully this is final implementation, the 3 messageTypes will probably not be used
-// Define a repeated string for the list
 message StringList {
   repeated string values = 1;
 }
 
-// Define the map with String keys and StringList values
 message FileMappingMap {
   map<string, StringList> mappings = 1;
 }
@@ -235,13 +216,5 @@ service Chord {
   // for joining when multiple files are transferred
   rpc retrieveFilesForSpan (FileRangeRequest) returns (stream FileDownloadResponse);
 
-  // for transferring the replication map for handling case where replication needs to be done again after crash
-  // might not use this any longer
-  rpc storeReplicationMapCopy(NodeReplicationMap) returns (google.protobuf.Empty);
-
-  // rpc storeFileMappings(FileMappingList) returns (google.protobuf.Empty);
-
-
-  // this is latest, might not use the two above
   rpc storeFileMappings(FileMappingRequest) returns (google.protobuf.Empty);
 }

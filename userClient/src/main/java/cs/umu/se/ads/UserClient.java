@@ -212,7 +212,7 @@ public class UserClient {
 //                    String responseBody = EntityUtils.toString(response.getEntity());
 //                    System.out.println("Failed to download file. Response code: " + status);
 //                    System.out.println("Response Body: " + responseBody);
-                    System.out.println("Failed to download file! Please double check the filename and try again.");
+                    System.out.println("Failed to download file!");
                     return null;
                 }
             };

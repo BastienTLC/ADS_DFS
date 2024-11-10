@@ -61,6 +61,16 @@ public class ChordClient {
         return new NodeHeader(nodeInfo.getIp(), nodeInfo.getPort(), nodeInfo.getId());
     }
 
+//    public NodeHeader getPredecessor() {
+//        try {
+//            NodeInfo nodeInfo = blockingStub.getPredecessor(Empty.getDefaultInstance());
+//            return new NodeHeader(nodeInfo.getIp(), nodeInfo.getPort(), nodeInfo.getId());
+//        } catch (StatusRuntimeException e) {
+//            System.err.println("getPredecessor failed: " + e.getStatus());
+//            return null;
+//        }
+//    }
+
     public void setPredecessor(NodeHeader node) {
         NodeInfo nodeInfo = NodeInfo.newBuilder()
                 .setId(node.getNodeId())
@@ -78,6 +88,16 @@ public class ChordClient {
         NodeInfo nodeInfo = blockingStub.getSuccessor(Empty.getDefaultInstance());
         return new NodeHeader(nodeInfo.getIp(), nodeInfo.getPort(), nodeInfo.getId());
     }
+
+//    public NodeHeader getSuccessor() {
+//        try {
+//            NodeInfo nodeInfo = blockingStub.getSuccessor(Empty.getDefaultInstance());
+//            return new NodeHeader(nodeInfo.getIp(), nodeInfo.getPort(), nodeInfo.getId());
+//        } catch (StatusRuntimeException e) {
+//            System.err.println("getSuccessor failed: " + e.getStatus());
+//            return null;
+//        }
+//    }
 
     public void setSuccessor(NodeHeader node) {
         NodeInfo nodeInfo = NodeInfo.newBuilder()
@@ -359,8 +379,6 @@ public class ChordClient {
                         System.err.println("Error writing file to disk for file: " + fileKey + " | " + e.getMessage());
                     }
                 });
-
-                System.out.println("Retrieval of files from successor has been successfully completed.");
 
                 // clearing map since all files have been stored
                 inProgressFiles.clear();

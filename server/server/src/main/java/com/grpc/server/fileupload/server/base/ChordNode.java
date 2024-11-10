@@ -33,8 +33,6 @@ public class ChordNode {
     private TreeMap<String, List<String>> predecessorReplicationMap;
 
 
-    // private Map<String, List<String>> nodeReplicationMap; // remove these later
-
     public ChordNode(String ip, int port, boolean multiThreadingEnabled, LoadBalancer loadBalancer, int m) {
         this.ip = ip;
         this.port = port;
@@ -58,8 +56,6 @@ public class ChordNode {
         // 2. Then, the predecessorReplicationMap must be updated with the new predecessors replicationMap,
         // Im thinking its the new predecessor that should be doing that, where in the setPredecessor() gRPC
         // call it can pass its fileMap?
-
-        // this.nodeReplicationMap = new HashMap<>(); // remove this later (currently part of addFileRecord no longer used)
 
 
     }
@@ -224,14 +220,34 @@ public class ChordNode {
 
     public String[] getResponsibleSpan() {
         String[] span = new String[2];
-
+        // this seems to never get called?
         if (predecessor == null) {
             span[0] = "0";
             span[1] = String.valueOf((Math.pow(2, m) - 1));
         }
         else{
-            span[0] = this.predecessor.getNodeId();
-            span[1] = this.nodeId;
+            int start = Integer.parseInt(predecessor.getNodeId());
+            int end = Integer.parseInt(this.nodeId);
+            // if start of span is not 2^m -1, the responsible span will be this.predecessor.getNodeId() + 1
+
+            // no wrap-around
+            if (start < end) {
+                span[0] = String.valueOf(start + 1);
+                span[1] = String.valueOf(end);
+            }
+            // if wrap-around
+            else {
+                // so if predecessor id is the highest number in the chord ring
+                if (start == (Math.pow(2, m) - 1)) {
+                    span[0] = "0";
+                    span[1] = this.nodeId;
+                }
+                else {
+                    span[0] = String.valueOf(start + 1);
+                    span[1] = String.valueOf(end);
+                }
+
+            }
         }
 
         return span;
@@ -340,31 +356,6 @@ public class ChordNode {
         return new HashMap<>(this.predecessorReplicationMap);
     }
 
-    // Two utility functions related to managing records
-    // This will help us determine which nodes to replicate to if one is missing
-    // If a Node joins, not sure if we simply should transfer the entire record of that node that is
-    // no longer reachable, or calculate the tree again
-//    public List<String> getFileIdentifiersForNode(String nodeIdentifier) {
-//        List<String> fileIdentifiers = nodeReplicationMap.get(nodeIdentifier);
-//        if (fileIdentifiers != null) {
-//            return new ArrayList<>(fileIdentifiers); // Return a copy of the list to avoid external modification
-//        } else {
-//            System.out.println("No list found for nodeIdentifier: " + nodeIdentifier);
-//            return Collections.emptyList();
-//        }
-//    }
-//
-//    public void printFileIdentifiersForNode(String nodeIdentifier) {
-//        List<String> fileIdentifiers = nodeReplicationMap.get(nodeIdentifier);
-//        if (fileIdentifiers != null) {
-//            System.out.println("File identifiers associated with nodeIdentifier " + nodeIdentifier + ":");
-//            for (String fileIdentifier : fileIdentifiers) {
-//                System.out.println(fileIdentifier);
-//            }
-//        } else {
-//            System.out.println("No list found for nodeIdentifier: " + nodeIdentifier);
-//        }
-//    }
 
 
     // id in this case is the id that was generated from replication tree
