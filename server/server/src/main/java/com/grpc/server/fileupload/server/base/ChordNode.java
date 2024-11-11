@@ -628,7 +628,7 @@ public class ChordNode {
         return this.currentHeader;
     }
 
-    public NodeHeader getSuccessorOfSuccessor(NodeHeader successor) {
+    /*public NodeHeader getSuccessorOfSuccessor(NodeHeader successor) {
         String nextSuccessorId = successor.getNodeId();
         int currentValue = Integer.parseInt(nextSuccessorId);
 
@@ -646,6 +646,32 @@ public class ChordNode {
 
 
         return successorOfSuccessor;
+    }*/
+    public NodeHeader getSuccessorOfSuccessor() {
+        for (int i = 0; i < m; i++) {
+            NodeHeader fingerNode = fingerTable.getFingers().get(i);
+
+            if (fingerNode != null && isNodeReachable(fingerNode)) {
+                return fingerNode;
+            }
+        }
+
+        return this.currentHeader;
+    }
+
+    private boolean isNodeReachable(NodeHeader node) {
+        ChordClient client = null;
+        try {
+            client = new ChordClient(node.getIp(), Integer.parseInt(node.getPort()));
+            NodeHeader response = client.getPredecessor();
+            return response != null;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (client != null) {
+                client.shutdown();
+            }
+        }
     }
 
 
@@ -674,18 +700,16 @@ public class ChordNode {
     }
 
     private void handleFailedSuccessor() {
-        System.out.println("Attempting to find a new successor..." + getSuccessorOfSuccessor(successor).getIp() + ":" + getSuccessorOfSuccessor(successor).getPort());
-        // shutting down old successorClient channel
-
+        System.out.println("Attempting to find a new successor..." + getSuccessorOfSuccessor().getIp() + ":" + getSuccessorOfSuccessor().getPort());
 
         // Find a new successor
-        NodeHeader newSuccessor = getSuccessorOfSuccessor(successor);
+        NodeHeader newSuccessor = getSuccessorOfSuccessor();
         ChordClient newSuccessorClient = new ChordClient(newSuccessor.getIp(), Integer.parseInt(newSuccessor.getPort()));
         try {
-            // check if the new successor cannot reach his current predecessor like the current node
+            // Check if the new successor cannot reach its current predecessor like the current node
             NodeHeader x = newSuccessorClient.getPredecessor();
             if (!Objects.equals(x.getNodeId(), this.successor.getNodeId())) {
-                // set the new successor's predecessor to the current node to eject the old successor
+                // Set the new successor's predecessor to the current node to eject the old successor
                 newSuccessorClient.setPredecessor(this.currentHeader);
                 this.successor = newSuccessor;
                 System.out.println("New successor found: " + this.successor.getIp() + ":" + this.successor.getPort());
