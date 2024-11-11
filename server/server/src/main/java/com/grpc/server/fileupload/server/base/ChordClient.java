@@ -24,6 +24,7 @@ import java.util.TreeMap;
 import java.util.concurrent.CountDownLatch;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 import static com.devProblems.ChordGrpc.newBlockingStub;
 
@@ -193,6 +194,35 @@ public class ChordClient {
         }
     }
 
+    public Map<String, List<String>> fetchNewPredecessorFileMappings() {
+        Empty request = Empty.newBuilder().build();
+
+        try {
+            // Call the GetFileMappings RPC and receive the response
+            FileMappingRequest response = blockingStub.getFileMappings(request);
+
+            Map<String, StringList> mappings = response.getFileMappingMap().getMappingsMap();
+
+            Map<String, List<String>> convertedMap = mappings.entrySet().stream()
+                    .collect(Collectors.toMap(
+                            entry -> entry.getKey(),
+                            entry -> entry.getValue().getValuesList()
+                    ));
+
+            System.out.println("Received the fileMap from the predecessor");
+            convertedMap.forEach((key, value) -> {
+                System.out.println("Key: " + key + ", Values: " + value);
+            });
+
+            return convertedMap;
+
+        } catch (Exception e) {
+            System.err.println("Failed to fetch file mappings: " + e.getMessage());
+        }
+
+        return null;
+    }
+
     public CompletableFuture<Boolean> retrieveFile(String key, String requester, StreamObserver<Fileupload.FileDownloadResponse> originalResponseObserver) {
         System.out.println("retrieveFile called");
 
@@ -261,6 +291,8 @@ public class ChordClient {
                 .setRequester(username)
                 .build();
 
+        CountDownLatch latch = new CountDownLatch(1);
+
         StreamObserver<FileDownloadResponse> responseObserver = new StreamObserver<>() {
             @Override
             public void onNext(FileDownloadResponse fileDownloadResponse) {
@@ -277,6 +309,7 @@ public class ChordClient {
             public void onError(Throwable t) {
                 System.err.println("Failed to retrieve file: " + t.getMessage());
                 t.printStackTrace();
+                latch.countDown();
             }
 
             @Override
@@ -289,10 +322,18 @@ public class ChordClient {
                         .build();
 
                 System.out.println("File " + filename + " retrieved successfully for user " + username);
+                latch.countDown();
             }
         };
 
         stub.retrieveFile(request, responseObserver);
+
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            System.err.println("Interrupted while waiting for file retrieval to complete.");
+            e.printStackTrace();
+        }
     }
 
     public void deleteFile(String key, String requester, StreamObserver<com.google.protobuf.Empty> originalResponseObserver) {

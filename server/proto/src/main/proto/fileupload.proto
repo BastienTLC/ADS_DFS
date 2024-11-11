@@ -217,4 +217,5 @@ service Chord {
   rpc retrieveFilesForSpan (FileRangeRequest) returns (stream FileDownloadResponse);
 
   rpc storeFileMappings(FileMappingRequest) returns (google.protobuf.Empty);
+  rpc GetFileMappings (google.protobuf.Empty) returns (FileMappingRequest); // only used when predecessor crashed and we need fileMap of new predecessor
 }

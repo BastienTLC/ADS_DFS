@@ -51,13 +51,6 @@ public class ChordNode {
         this.fileMap = new TreeMap<>();
         this.predecessorReplicationMap = new TreeMap<>(); // here copy of predecessors tree map will be stored
 
-        // TODO:
-        // 1. if the node crashes, the predecessorReplicationMap will be merged with fileMap (not implemented yet).
-        // 2. Then, the predecessorReplicationMap must be updated with the new predecessors replicationMap,
-        // Im thinking its the new predecessor that should be doing that, where in the setPredecessor() gRPC
-        // call it can pass its fileMap?
-
-
     }
 
     // Function to hash the node ID based on IP and port
@@ -91,36 +84,94 @@ public class ChordNode {
             System.out.println("New predecessor found: " + predecessor.getIp() + ":" + predecessor.getPort());
             this.predecessor = predecessor;
 
+            printPredecessorMap();
 
-
+            Set<String> retrievedFilesSet = new HashSet<>();
             for (Map.Entry<String, List<String>> entry : predecessorReplicationMap.entrySet()) {
-                String key = entry.getKey();
+                String key = entry.getKey(); // the key is not needed for this part
                 List<String> files = entry.getValue();
 
                 for (String file : files) {
+
                     String[] fileDetails = file.split(":");
                     String filename = fileDetails[0];
                     String username = fileDetails[1];
 
-                    NodeHeader responsibleNode = findSuccessor(key);  // notice how key is only used to find the replica holding the file
-                    if (responsibleNode != null) {
-                        System.out.println("No responsible node found for key (should not be possible) " + key);
-                        continue;
+                    // 1. Node should check if we are already storing the file. In that case, we do not need to retrieve it
+                    // (and remember mappings will be merged done later for the entire map)
+                    if (checkMappingForFileIdentifier(file)) {
+                        System.out.println("A replica of this file already exists, so retrieval of it will not be needed.");
                     }
+                    // Check: If we've already retrieved this file before, skip it
+                    else if (retrievedFilesSet.contains(file)) {
+                        System.out.println("File '" + file + "' already retrieved. Skipping...");
+                    }
+                    // 2. Before calling retrieveCopyOfFile, it should create a tree using the filename.
+                    else {
+                        String id = hashNode(filename);
+
+                        int maxDepth = 1; // this is the depth it will be doing replication for, so actual depth of tree is 2
+                        TreeBasedReplication treeReplication = new TreeBasedReplication(m);
+                        Map<Integer, List<Integer>> replicaTree = treeReplication.generateReplicaTree(Integer.parseInt(id), maxDepth);
+                        List<Integer> leafNodes = treeReplication.getLeafNodes(replicaTree);
 
 
-                    ChordClient responsibleNodeClient = new ChordClient(responsibleNode.getIp(), Integer.parseInt(responsibleNode.getPort()));
-                    responsibleNodeClient.retrieveCopyOfFile(filename, username);
-                    responsibleNodeClient.shutdown();
+                        // 3. Iterates over the tree, making sure it is not responsible for the id it will retrieve file from
+                        for (Integer replicaKey : leafNodes) {
+                            // only if it is not responsible for the node
+                            if (!isIdWithinSpan(String.valueOf(replicaKey))) {
+                                if (!retrievedFilesSet.contains(file)) {
+                                    NodeHeader responsibleNode = findSuccessor(String.valueOf(replicaKey));
+                                    System.out.println("Obtaining the file '" + file + "' from " + responsibleNode.getIp() + ":" + responsibleNode.getPort());
+                                    ChordClient responsibleNodeClient = new ChordClient(responsibleNode.getIp(), Integer.parseInt(responsibleNode.getPort()));
+                                    responsibleNodeClient.retrieveCopyOfFile(filename, username); // this does not add any mapping I think
+                                    responsibleNodeClient.shutdown();
+
+                                    retrievedFilesSet.add(file);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 1. merging the fileMap with the precessorMap, then clearing predecessorMap (belonging to node that crashed)
+            mergeFileMaps();
+            System.out.println("Merged current fileMap with the predecessors map");
+            printFileMap();
+
+            // 2. send its updated fileMap to the successor
+            if (this.successor != null) {
+                if (successor.getIp() != this.getIp() || Integer.parseInt(successor.getPort()) != this.getPort()){
+                    System.out.println("Sending the updated fileMap to successor...");
+                    ChordClient successorClient = new ChordClient(successor.getIp(), Integer.parseInt(successor.getPort()));
+                    successorClient.sendFileMappings(this.fileMap);
+                    successorClient.shutdown();
+                }
+            }
+            else {
+                System.out.println("Update fileMap was not sent since successor was null!");
+            }
+
+            // 3. update its predecessorReplicationMap with the new predecessors replicationMap
+            // Currently this node will actively ask its new predecessor for its replication map,
+            // however, should probably try change it so that the map instead is included in the setPredecessor call
+            if (predecessor.getIp() != this.getIp() || Integer.parseInt(predecessor.getPort()) != this.getPort()){
+                System.out.println("Retrieving fileMap from new predecessor....");
+                ChordClient predecessorClient = new ChordClient(predecessor.getIp(), Integer.parseInt(predecessor.getPort()));
+                Map<String, List<String>> newPredecessorFileMap = predecessorClient.fetchNewPredecessorFileMappings();
+                if (newPredecessorFileMap != null){
+                    updatePredecessorReplicationMap(newPredecessorFileMap);
+                }
+                else {
+                    System.out.println("New predecessor map was null!");
                 }
 
-
-                // additionally we should probably check we don't already have these files stored, but for now we can
-                // maybe get them sent to us anyway
-
-                // also needs to update its predecessorReplicationMap with the new predecessors replicationMap
-
+                predecessorClient.shutdown();
             }
+
+
+
         }
         else{
             this.predecessor = predecessor;
@@ -202,6 +253,12 @@ public class ChordNode {
         return predId >= currentId;
     }
 
+    public void mergeFileMaps() {
+        fileMap.putAll(predecessorReplicationMap);
+
+        predecessorReplicationMap.clear();
+    }
+
     public void printResponsibleSpan() {
         if (predecessor == null) {
             System.out.println("Responsible for entire range: 0 to " + (Math.pow(2, m) - 1));
@@ -253,6 +310,23 @@ public class ChordNode {
         return span;
     }
 
+    // currently this function only used when node does re-replication, might use it in other functions too
+    public boolean isIdWithinSpan(String id) {
+        String[] span = getResponsibleSpan();
+        int start = Integer.parseInt(span[0]);
+        int end = Integer.parseInt(span[1]);
+        int targetId = Integer.parseInt(id);
+
+        // Case 1: No wrap-around
+        if (start <= end) {
+            return (targetId >= start && targetId <= end);
+        }
+        // Case 2: Wrap-around
+        else {
+            return (targetId >= start || targetId <= end);
+        }
+    }
+
     public void printFingerTable() {
         System.out.println("Finger Table for Node ID: " + this.nodeId);
 
@@ -291,6 +365,29 @@ public class ChordNode {
         }
     }
 
+    public void printPredecessorMap() {
+        System.out.println("Printing predecessorMap of current node...");
+        for (Map.Entry<String, List<String>> entry : predecessorReplicationMap.entrySet()) {
+            String key = entry.getKey();
+            List<String> values = entry.getValue();
+
+            System.out.println("Key: " + key);
+
+            System.out.println("Values:");
+            if (values != null && !values.isEmpty()) {
+                for (String value : values) {
+                    System.out.println(" - " + value);
+                }
+            } else {
+                System.out.println(" - (No values)");
+            }
+        }
+    }
+
+    public TreeMap<String, List<String>> getFileMap() {
+        return new TreeMap<>(fileMap);
+    }
+
     // in the map key is the id used when replicating, value is a list of filename:username
     // the span is a calculated wrong somewhere in regards to <=, since 25 can be stored on two nodes at once for example
     public void addMapping(String filename, String username){
@@ -309,29 +406,38 @@ public class ChordNode {
         int spanStart = Integer.parseInt(span[0]);
         int spanEnd = Integer.parseInt(span[1]);
         System.out.println("Adding mapping for " + value + ", based on which replicas fall into the span '" + spanStart + "-" + spanEnd + "'");
-        int maxId = (int) Math.pow(2, m) - 1; // so for m =6 max is 63
 
         for (Integer replicaKey : leafNodes) {
             // Case 1 : entire span is covered, for first node, 25-25 (this might break if node is only responsible for 1 id)
             if (spanStart == spanEnd) {
-                System.out.println("Replica " + replicaKey + " has been added to the fileMap");
-                fileMap.computeIfAbsent(String.valueOf(replicaKey), k -> new ArrayList<>()).add(value);
+                fileMap.computeIfAbsent(String.valueOf(replicaKey), k -> new ArrayList<>());
+                if (!fileMap.get(String.valueOf(replicaKey)).contains(value)) {
+                    System.out.println("Replica " + replicaKey + " has been added to the fileMap");
+                    fileMap.get(String.valueOf(replicaKey)).add(value);
+                }
             }
             // these two below have not been properly tested
             // Case 2: No wraparound (e.g., spanStart = 10, spanEnd = 40)
             else if (spanStart <= spanEnd) {
                 if (replicaKey >= spanStart && replicaKey <= spanEnd) {
                     // replicaKey is within span
-                    System.out.println("Replica " + replicaKey + " has been added to the fileMap");
-                    fileMap.computeIfAbsent(String.valueOf(replicaKey), k -> new ArrayList<>()).add(value);
+                    fileMap.computeIfAbsent(String.valueOf(replicaKey), k -> new ArrayList<>());
+                    if (!fileMap.get(String.valueOf(replicaKey)).contains(value)) {
+                        System.out.println("Replica " + replicaKey + " has been added to the fileMap");
+                        fileMap.get(String.valueOf(replicaKey)).add(value);
+                    }
                 }
             }
             // Case 3: Wraparound (e.g., spanStart = 40, spanEnd = 20)
             else {
+                int maxId = (int) Math.pow(2, m) - 1; // so for m =6 max is 63
                 if ((replicaKey >= spanStart && replicaKey <= maxId) || (replicaKey >= 0 && replicaKey <= spanEnd)) {
                     // replicaKey is within span
-                    fileMap.computeIfAbsent(String.valueOf(replicaKey), k -> new ArrayList<>()).add(value);
-                    System.out.println("Replica " + replicaKey + " has been added to the fileMap");
+                    fileMap.computeIfAbsent(String.valueOf(replicaKey), k -> new ArrayList<>());
+                    if (!fileMap.get(String.valueOf(replicaKey)).contains(value)) {
+                        System.out.println("Replica " + replicaKey + " has been added to the fileMap");
+                        fileMap.get(String.valueOf(replicaKey)).add(value);
+                    }
                 }
             }
         }
@@ -340,6 +446,7 @@ public class ChordNode {
             if (successor.getIp() != this.getIp() || Integer.parseInt(successor.getPort()) != this.getPort()){
                 System.out.println("Sending the updated fileMap to successor...");
                 ChordClient successorClient = new ChordClient(successor.getIp(), Integer.parseInt(successor.getPort()));
+                printFileMap();
                 successorClient.sendFileMappings(this.fileMap);
                 successorClient.shutdown();
             }

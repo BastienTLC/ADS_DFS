@@ -344,17 +344,46 @@ public class ChordServiceImpl extends ChordImplBase {
 
 
     public void storeFileMappings(FileMappingRequest request, StreamObserver<Empty> responseObserver) {
-        // Extract the mappings from the request
         Map<String, StringList> mappings = request.getFileMappingMap().getMappingsMap();
 
-        // Process the received data (example)
+        Map<String, List<String>> convertedMap = mappings.entrySet().stream()
+                .collect(Collectors.toMap(
+                        entry -> entry.getKey(),
+                        entry -> entry.getValue().getValuesList()
+                ));
+
         System.out.println("Received the fileMap from the predecessor");
-        mappings.forEach((key, value) -> {
-            System.out.println("Key: " + key + ", Values: " + value.getValuesList());
+        convertedMap.forEach((key, value) -> {
+            System.out.println("Key: " + key + ", Values: " + value);
         });
 
-        // Respond with an Empty message as per your proto definition
+        chordNode.updatePredecessorReplicationMap(convertedMap);
+
         responseObserver.onNext(Empty.getDefaultInstance());
+        responseObserver.onCompleted();
+    }
+
+
+    public void getFileMappings(Empty request, StreamObserver<FileMappingRequest> responseObserver) {
+        // Retrieve the file mappings stored in chordNode
+        TreeMap<String, List<String>> serverFileMap = chordNode.getFileMap();
+
+        // Convert serverFileMap to FileMappingRequest
+        FileMappingMap.Builder mapBuilder = FileMappingMap.newBuilder();
+        for (Map.Entry<String, List<String>> entry : serverFileMap.entrySet()) {
+            StringList stringList = StringList.newBuilder()
+                    .addAllValues(entry.getValue())
+                    .build();
+            mapBuilder.putMappings(entry.getKey(), stringList);
+        }
+
+        // Build the FileMappingRequest to send back to the client
+        FileMappingRequest response = FileMappingRequest.newBuilder()
+                .setFileMappingMap(mapBuilder.build())
+                .build();
+
+        // Send the response
+        responseObserver.onNext(response);
         responseObserver.onCompleted();
     }
 
