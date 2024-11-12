@@ -291,7 +291,7 @@ public class ChordServiceImpl extends ChordImplBase {
                 } catch (IOException e) {
                     System.err.println("Error reading file " + filename + ": " + e.getMessage());
                     responseObserver.onError(Status.INTERNAL.withDescription("Error reading file").asRuntimeException());
-                    e.printStackTrace();
+                    // e.printStackTrace();
                     return;
                 }
             });
@@ -300,8 +300,6 @@ public class ChordServiceImpl extends ChordImplBase {
 
         // this will safely remove mappings we no longer need
         idsToRemove.forEach(chordNode::removeMappingForId);
-
-        // TODO: make sure that the predecessorReplicationMap is updated somewhere
 
         // deleting all files that we sent away (and the directory they are in if they are now empty)
         filesToDelete.forEach(fileIdentifier -> {
