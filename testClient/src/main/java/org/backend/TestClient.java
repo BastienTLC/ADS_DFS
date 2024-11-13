@@ -25,8 +25,10 @@ public class TestClient {
             // Example usage:
             System.out.println("Starting tests...");
             System.out.println("Test 1: Upload/download time vs. concurrent users");
-            testClient.testUploadDownloadTimeVsConcurrentUsers(5, 20, 20, 100);
-            //testClient.testUploadDownloadTimeVsFileSize(5, 0, 1024, 102400);
+            testClient.testUploadDownloadTimeVsConcurrentUsers(5, 10, 10, 50, 3, 5);
+            //testClient.testUploadDownloadTimeVsFileSize(5, 1, 102400, 102400, 3, 11);
+            //testClient.testDownloadTimeVsConcurrentUsers(5, 200, 200, 1000, 3, 5);
+            //testClient.testDownloadTimeVsFileSize(5, 1024, 1024, 1024, 5, 5);
             //testClient.testAuthentication();
             //testClient.testUserIsolation();
         } catch (IOException | InterruptedException e) {
@@ -38,10 +40,10 @@ public class TestClient {
 
 
     // Test the evolution of upload/download time as a function of the number of concurrent users.
-    public void testUploadDownloadTimeVsConcurrentUsers(int iterations, int increment, int startBound, int endBound) throws IOException, InterruptedException {
+    public void testUploadDownloadTimeVsConcurrentUsers(int iterations, int increment, int startBound, int endBound, int nbHttpInstance, int nbNode) throws IOException, InterruptedException {
         String csvFile = "upload_download_time_vs_concurrent_users.csv";
         try (PrintWriter writer = new PrintWriter(new FileWriter(csvFile))) {
-            writer.println("Iteration,ConcurrentUsers,UploadTime(ms),DownloadTime(ms), UniqueUploadsMessageTime(ms/user), UniqueDownloadsMessageTime(ms/user)");
+            writer.println("Iteration,ConcurrentUsers,UploadTime(ms),DownloadTime(ms), UniqueUploadsMessageTime(ms/user), UniqueDownloadsMessageTime(ms/user), NbHttpInstance, NbNode");
             for (int userCount = startBound; userCount <= endBound; userCount += increment) {
                 for (int i = 1; i <= iterations; i++) {
                     // Create users
@@ -60,7 +62,7 @@ public class TestClient {
                     long uniqueDownloadsMessageTime = downloadTime / userCount;
 
                     // Log the result
-                    writer.printf("%d,%d,%d,%d,%d,%d%n", i, userCount, uploadTime, downloadTime, uniqueUploadsMessageTime, uniqueDownloadsMessageTime);
+                    writer.printf("%d,%d,%d,%d,%d,%d,%d,%d%n", i, userCount, uploadTime, downloadTime, uniqueUploadsMessageTime, uniqueDownloadsMessageTime, nbHttpInstance, nbNode);
                     writer.flush();
 
                     // Clean up
@@ -74,30 +76,108 @@ public class TestClient {
     }
 
     // Test the evolution of upload/download time as a function of the file size.
-    public void testUploadDownloadTimeVsFileSize(int iterations, int increment, int startBound, int endBound) throws IOException, InterruptedException {
+    public void testUploadDownloadTimeVsFileSize(int iterations, int increment, int startBound, int endBound, int nbHttpServ, int nbNode) throws IOException, InterruptedException {
         String csvFile = "upload_download_time_vs_file_size.csv";
         try (PrintWriter writer = new PrintWriter(new FileWriter(csvFile))) {
-            writer.println("Iteration,FileSize(Bytes),UploadTime(ms),DownloadTime(ms)");
+            writer.println("Iteration,FileSize(Bytes),UploadTime(ms),DownloadTime(ms), UniqueUploadsMessageTime(ms/user), UniqueDownloadsMessageTime(ms/user), NbHttpServ, NbNode");
 
             // For this test, we'll use a fixed number of users
-            int userCount = 10;
+            int userCount = 30;
+            System.out.println("Creating " + userCount + " users...");
             createUsers(userCount);
 
             for (int fileSize = startBound; fileSize <= endBound; fileSize += (increment > 0 ? increment : fileSize)) {
+                System.out.println("Performing upload and download tests for file size: " + fileSize + " bytes...");
                 for (int i = 1; i <= iterations; i++) {
                     // Perform upload and download tests
+                    System.out.println("Performing upload and download tests for file size: " + fileSize + " bytes...");
                     long uploadTime = performConcurrentUploads(fileSize);
                     long downloadTime = performConcurrentDownloads();
+                    long uniqueUploadsMessageTime = uploadTime / userCount;
+                    long uniqueDownloadsMessageTime = downloadTime / userCount;
 
                     // Log the result
-                    writer.printf("%d,%d,%d,%d%n", i, fileSize, uploadTime, downloadTime);
+                    writer.printf("%d,%d,%d,%d,%d,%d,%d,%d%n", i, fileSize, uploadTime, downloadTime, uniqueUploadsMessageTime, uniqueDownloadsMessageTime, nbHttpServ, nbNode);
                     writer.flush();
                 }
+                System.out.println("Finished tests for file size: " + fileSize + " bytes.");
+                System.out.println("--------------------------------------------------");
             }
+            System.out.println("All tests completed.");
+
 
             users.clear();
         }
     }
+
+    public void testDownloadTimeVsConcurrentUsers(int iterations, int increment, int startBound, int endBound, int nbHttpInstance, int nbNode) throws IOException, InterruptedException {
+        String csvFile = "download_time_vs_concurrent_users.csv";
+        try (PrintWriter writer = new PrintWriter(new FileWriter(csvFile))) {
+            writer.println("Iteration,ConcurrentUsers,DownloadTime(ms),UniqueDownloadTime(ms/user),NbHttpInstance,NbNode");
+
+            // Step 1: Create 'endBound' number of users and upload one file for each (done once)
+            System.out.println("Creating " + endBound + " users and uploading files...");
+            createUsers(endBound); // This creates users and registers them
+            System.out.println("Uploading files for each user sequentially...");
+            performInitialUploadsForUsers(1024);
+            System.out.println("Finished uploading files for each user.");
+
+            // Step 2: Perform download tests by varying the number of concurrent users
+            for (int userCount = startBound; userCount <= endBound; userCount += increment) {
+                System.out.println("Performing download tests with " + userCount + " concurrent users...");
+                for (int i = 1; i <= iterations; i++) {
+                    long downloadTime = performConcurrentDownloadsForSubset(userCount);
+                    long uniqueDownloadTime = downloadTime / userCount;
+
+                    // Log the result
+                    writer.printf("%d,%d,%d,%d,%d,%d%n", i, userCount, downloadTime, uniqueDownloadTime, nbHttpInstance, nbNode);
+                    writer.flush();
+                }
+                System.out.println("Finished download tests for " + userCount + " users.");
+                System.out.println("--------------------------------------------------");
+            }
+            System.out.println("All download tests completed.");
+            users.clear();
+        }
+    }
+
+    public void testDownloadTimeVsFileSize(int iterations, int increment, int startBound, int endBound, int nbHttpInstance, int nbNode) throws IOException, InterruptedException {
+        String csvFile = "download_time_vs_file_size.csv";
+        try (PrintWriter writer = new PrintWriter(new FileWriter(csvFile))) {
+            writer.println("Iteration,FileSize(Bytes),DownloadTime(ms),UniqueDownloadTime(ms/user),NbHttpInstance,NbNode");
+
+            // Step 1: Create a fixed number of users
+            int userCount = 200;
+            System.out.println("Creating " + userCount + " users...");
+            createUsers(userCount);
+            System.out.println("Users created and registered.");
+
+            // Step 2: For each file size, upload files for each user and perform download tests
+            for (int fileSize = startBound; fileSize <= endBound; fileSize += increment) {
+                System.out.println("Uploading files of size " + fileSize + " bytes for each user...");
+                performInitialUploadsForUsers(fileSize);
+                System.out.println("Finished uploading files of size " + fileSize + " bytes for each user.");
+
+                // Step 3: Perform download tests for the current file size
+                for (int i = 1; i <= iterations; i++) {
+                    System.out.println("Performing download test iteration " + i + " for file size " + fileSize + " bytes...");
+                    long downloadTime = performConcurrentDownloads();
+                    long uniqueDownloadTime = downloadTime / userCount;
+
+                    // Log the result
+                    writer.printf("%d,%d,%d,%d,%d,%d%n", i, fileSize, downloadTime, uniqueDownloadTime, nbHttpInstance, nbNode);
+                    writer.flush();
+                }
+
+                System.out.println("Finished download tests for file size " + fileSize + " bytes.");
+                System.out.println("--------------------------------------------------");
+            }
+
+            System.out.println("All download tests completed.");
+            users.clear();
+        }
+    }
+
 
     // Test user authentication.
     public void testAuthentication(){
@@ -156,7 +236,6 @@ public class TestClient {
                     System.err.println("Upload failed for user: " + user.getUsername());
                 }
 
-                // Clean up
                 file.delete();
                 user.setUploadedFileName(fileName);
 
@@ -181,6 +260,71 @@ public class TestClient {
         executorService.awaitTermination(5, TimeUnit.MINUTES);
 
         return totalTime; // Total time for all users
+    }
+
+    private void performInitialUploadsForUsers(int fileSize) throws IOException, InterruptedException {
+        System.out.println("Starting sequential uploads for all users...");
+        for (User user : users) {
+            // Generate a random file of the specified size
+            File file = FileGenerator.generateRandomFile(fileSize, "file" + System.currentTimeMillis());
+            String fileName = file.getName();
+
+            // Upload the file
+            boolean success = user.uploadFile(SERVER_URL + "/upload", file);
+            if (!success) {
+                System.err.println("Initial upload failed for user: " + user.getUsername());
+            }
+            file.delete();
+            user.setUploadedFileName(fileName);
+        }
+        System.out.println("All uploads are completed.");
+    }
+
+    private long performConcurrentDownloadsForSubset(int userCount) throws InterruptedException, IOException {
+        List<User> subsetUsers = users.subList(0, userCount);
+        executorService = Executors.newFixedThreadPool(userCount);
+        List<Callable<Long>> downloadTasks = new ArrayList<>();
+
+        for (User user : subsetUsers) {
+            downloadTasks.add(() -> {
+                String fileName = user.getUploadedFileName();
+
+                // Measure download time
+                long startTime = System.currentTimeMillis();
+                boolean success = user.downloadFile(SERVER_URL + "/download", fileName);
+                long endTime = System.currentTimeMillis();
+
+                if (!success) {
+                    System.err.println("Download failed for user: " + user.getUsername());
+                }
+
+                // Optionally delete downloaded file
+                File downloadedFile = new File("Downloads/" + fileName);
+                if (downloadedFile.exists()) {
+                    downloadedFile.delete();
+                }
+
+                return endTime - startTime;
+            });
+        }
+
+        // Execute download tasks concurrently
+        List<Future<Long>> futures = executorService.invokeAll(downloadTasks);
+
+        // Collect times
+        long totalTime = 0;
+        for (Future<Long> future : futures) {
+            try {
+                totalTime += future.get();
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            }
+        }
+
+        executorService.shutdown();
+        executorService.awaitTermination(10, TimeUnit.MINUTES);
+
+        return totalTime; // Total time for all users in the subset
     }
 
     private long performConcurrentDownloads() throws InterruptedException, IOException {

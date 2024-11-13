@@ -795,6 +795,7 @@ public class ChordNode {
 
                 successorClient.notify(this.currentHeader);
             } catch (Exception e) {
+                successorClient.shutdown();
                 System.err.println("Unexpected error in stabilize(): " + e.getMessage());
                 // Trigger the handleFailedSuccessor method if the successor is unreachable
                 handleFailedSuccessor();
@@ -807,8 +808,7 @@ public class ChordNode {
     }
 
     private void handleFailedSuccessor() {
-        System.out.println("Attempting to find a new successor..." + getSuccessorOfSuccessor().getIp() + ":" + getSuccessorOfSuccessor().getPort());
-
+        System.err.println("Successor node failed. Attempting to find a new successor...");
         // Find a new successor
         NodeHeader newSuccessor = getSuccessorOfSuccessor();
         ChordClient newSuccessorClient = new ChordClient(newSuccessor.getIp(), Integer.parseInt(newSuccessor.getPort()));
@@ -819,6 +819,7 @@ public class ChordNode {
                 // Set the new successor's predecessor to the current node to eject the old successor
                 newSuccessorClient.setPredecessor(this.currentHeader);
                 this.successor = newSuccessor;
+                loadBalancer.deregisterNode(this.ip, this.port);
                 System.out.println("New successor found: " + this.successor.getIp() + ":" + this.successor.getPort());
             } else {
                 this.successor = x;
