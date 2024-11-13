@@ -413,14 +413,11 @@ public class ChordClient {
 
 
 
-    public void storeFile(String key, byte[] fileContent) {
+    public void storeFile(byte[] fileContent) {
         // Create the stub for FileUploadService
-        System.out.println("storeFile called");
         ChordGrpc.ChordStub stub = ChordGrpc.newStub(channel);
 
         FileMetadata fileMetadata = Constants.fileMetaContext.get();
-
-        System.out.println("File metadata: " + fileMetadata.getFileNameWithType());
 
         Metadata metadata = new Metadata();
         metadata.put(Constants.fileMetadataKey,
@@ -441,7 +438,6 @@ public class ChordClient {
         StreamObserver<FileUploadResponse> responseObserver = new StreamObserver<>() {
             @Override
             public void onNext(FileUploadResponse value) {
-                System.out.println("File upload status: " + value.getUploadStatus());
             }
 
             @Override
@@ -452,7 +448,6 @@ public class ChordClient {
 
             @Override
             public void onCompleted() {
-                System.out.println("File upload completed.");
                 finishLatch.countDown();  // Signal that the process is done
             }
         };
@@ -470,7 +465,6 @@ public class ChordClient {
 
                 FileUploadRequest request = FileUploadRequest.newBuilder()
                         .setFile(File.newBuilder().setContent(content))
-                        .setKey(key) // new, now being passed for each upload
                         .build();
                 requestObserver.onNext(request);
                 offset += length;
@@ -480,6 +474,7 @@ public class ChordClient {
 
             // Wait until the file upload is complete or an error occurs
             finishLatch.await();
+            System.out.println("File upload for file: " + fileMetadata.getFileNameWithType() + " has been completed");
         } catch (Exception e) {
             // e.printStackTrace();
             System.out.println("Error occured");

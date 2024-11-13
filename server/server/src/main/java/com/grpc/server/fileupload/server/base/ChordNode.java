@@ -3,11 +3,14 @@ package com.grpc.server.fileupload.server.base;
 
 import com.devProblems.Fileupload;
 import com.grpc.server.fileupload.server.types.NodeHeader;
+import com.grpc.server.fileupload.server.utils.DiskFileStorage;
 import com.grpc.server.fileupload.server.utils.LoadBalancer;
 import com.grpc.server.fileupload.server.utils.TreeBasedReplication;
 import io.grpc.stub.StreamObserver;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -412,8 +415,7 @@ public class ChordNode {
                     fileMap.get(String.valueOf(replicaKey)).add(value);
                 }
             }
-            // these two below have not been properly tested
-            // Case 2: No wraparound (e.g., spanStart = 10, spanEnd = 40)
+            // Case 2: No wraparound
             else if (spanStart <= spanEnd) {
                 if (replicaKey >= spanStart && replicaKey <= spanEnd) {
                     // replicaKey is within span
@@ -424,7 +426,7 @@ public class ChordNode {
                     }
                 }
             }
-            // Case 3: Wraparound (e.g., spanStart = 40, spanEnd = 20)
+            // Case 3: Wraparound
             else {
                 int maxId = (int) Math.pow(2, m) - 1; // so for m =6 max is 63
                 if ((replicaKey >= spanStart && replicaKey <= maxId) || (replicaKey >= 0 && replicaKey <= spanEnd)) {
@@ -818,11 +820,10 @@ public class ChordNode {
     }
 
     // this will be called each time a file is sent to the chord network, since it has to be replicated
-    public void storeFileInChord(String key, byte[] fileContent) {
+    public void storeFileInChord(String filename, String author, byte[] fileContent) {
         Runnable task = () -> {
             // Hash the key to find the node responsible for storing the file
-            String keyId = hashNode(key);
-            System.out.println("Key is: " + key + " and keyId is: " + keyId);
+            String keyId = hashNode(filename);
 
             int depth = 2;
             TreeBasedReplication treeReplication = new TreeBasedReplication(m);
@@ -841,18 +842,32 @@ public class ChordNode {
                 // line below is used to keep track which ip:ports we have sent files to already, so we don't do it again
                 String nodeIdentifier = responsibleNode.getIp() + ":" + responsibleNode.getPort();
 
-                // current implementation makes a GRPC call to itself if it is the responsible node
                 if (storedNodeIdentifiers.add(nodeIdentifier)) {  // this returns false if already present
-                    // if (responsibleNode.getIp().equals(this.ip) &&
-                    //         Integer.parseInt(responsibleNode.getPort()) == (this.port)) {
-                    // }
+                    // not sending grpc request if the responseNode itself, downloading the file directly.
+                    if (currentHeader.getIp().equals(responsibleNode.getIp()) && currentHeader.getPort().equals(responsibleNode.getPort())) {
+                        System.out.println("The responsibleNode was the node that received the file from client, storing file...");
+                        DiskFileStorage diskFileStorage = new DiskFileStorage();
+                        try {
+                            diskFileStorage.write(filename, author, nodeId);
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+
+                        addMapping(filename, author);
+
+
+                        continue;
+                    }
+
 
                     System.out.println("responsibleNode (" + responsibleNode.getIp() + ":" + Integer.parseInt(responsibleNode.getPort())
                             + ") found, responsible for key: " + replicaKey);
+
+
                     ChordClient responsibleNodeClient = new ChordClient(responsibleNode.getIp(), Integer.parseInt(responsibleNode.getPort()));
 
                     // this replicaKey was previously never used, which it is now when creating the mapping
-                    responsibleNodeClient.storeFile(String.valueOf(replicaKey), fileContent);
+                    responsibleNodeClient.storeFile(fileContent);
                     responsibleNodeClient.shutdown();
                 }
 

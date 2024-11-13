@@ -392,16 +392,11 @@ public class ChordServiceImpl extends ChordImplBase {
         FileMetadata fileMetadata = Constants.fileMetaContext.get();
         DiskFileStorage diskFileStorage = new DiskFileStorage();
 
-        final String[] fileKey = {null};
-
         return new StreamObserver<>() {
             @Override
             // this method will write the bytes to the byte array stream that we have created in the diskFileStorage
             public void onNext(FileUploadRequest fileUploadRequest) {
-                if (fileKey[0] == null) {
-                    System.out.println("Setting key...");
-                    fileKey[0] = fileUploadRequest.getKey(); // Extract the key here
-                }
+
                 // called so we can compare that received data matches the data sent
                 System.out.println(String.format("received %d length of data", fileUploadRequest.getFile().getContent().size()));
                 try {
@@ -434,10 +429,6 @@ public class ChordServiceImpl extends ChordImplBase {
                         System.out.println("Writing the file to the following NodeId directory: " + chordNode.getNodeId());
                         diskFileStorage.write(fileMetadata.getFileNameWithType(),fileMetadata.getAuthor(), chordNode.getNodeId());
                         diskFileStorage.close();
-
-                        if (fileKey[0] != null){
-                            System.out.println("Received the key: " + fileKey[0] + " in storeFile()");
-                        }
 
                         chordNode.addMapping(fileMetadata.getFileNameWithType(), fileMetadata.getAuthor());
                     } else {
@@ -536,9 +527,10 @@ public class ChordServiceImpl extends ChordImplBase {
                     int totalBytesReceived = byteArrayOutputStream.size();
                     if (totalBytesReceived == fileMetadata.getContentLength()) {
                         String name = fileMetadata.getFileNameWithType();
+                        String author = fileMetadata.getAuthor();
                         byteArrayOutputStream.close();
                         byte[] fileContent = byteArrayOutputStream.toByteArray();
-                        chordNode.storeFileInChord(name, fileContent);
+                        chordNode.storeFileInChord(name, author, fileContent);
                     } else {
                         responseObserver.onError(
                                 io.grpc.Status.FAILED_PRECONDITION

@@ -13,7 +13,6 @@ message File {
 
 message FileUploadRequest {
   File file = 1;
-  string key = 2; // new, this is the key that was used to distribute it to correct node upon replicating
 }
 
 
