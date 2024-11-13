@@ -861,7 +861,7 @@ public class ChordNode {
 
 
                     System.out.println("responsibleNode (" + responsibleNode.getIp() + ":" + Integer.parseInt(responsibleNode.getPort())
-                            + ") found, responsible for key: " + replicaKey);
+                            + ") found, responsible for key: " + replicaKey + ", storing file...");
 
 
                     ChordClient responsibleNodeClient = new ChordClient(responsibleNode.getIp(), Integer.parseInt(responsibleNode.getPort()));
