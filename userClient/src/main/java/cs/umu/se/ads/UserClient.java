@@ -28,11 +28,6 @@ import org.json.JSONObject;
 // In order to start uploading/downloading files, login and the bearer
 // token will be used automatically.
 
-// In rare cases some specific usernames that have been registered before
-// will not let us login. This occurs with testuser:testuser for me.
-// Might need to check that multiple UserClients can use this program at the same time.
-
-
 public class UserClient {
 
     private static String BEARER_TOKEN = null;
@@ -209,10 +204,6 @@ public class UserClient {
                     System.out.println("File downloaded successfully to ./Downloads/");
                     return null;
                 } else {
-//                    String responseBody = EntityUtils.toString(response.getEntity());
-//                    System.out.println("Failed to download file. Response code: " + status);
-//                    System.out.println("Response Body: " + responseBody);
-                    System.out.println("Failed to download file!");
                     return null;
                 }
             };
