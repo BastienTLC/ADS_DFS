@@ -738,10 +738,10 @@ public class ChordNode {
             // Check if the new successor cannot reach its current predecessor like the current node
             NodeHeader x = newSuccessorClient.getPredecessor();
             if (!Objects.equals(x.getNodeId(), this.successor.getNodeId())) {
+                loadBalancer.deregisterNode(this.successor.getIp(), Integer.parseInt(this.successor.getPort()));
                 // Set the new successor's predecessor to the current node to eject the old successor
                 newSuccessorClient.setPredecessor(this.currentHeader);
                 this.successor = newSuccessor;
-                loadBalancer.deregisterNode(this.ip, this.port);
                 System.out.println("New successor found: " + this.successor.getIp() + ":" + this.successor.getPort());
             } else {
                 this.successor = x;
