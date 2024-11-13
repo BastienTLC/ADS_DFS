@@ -62,7 +62,7 @@ public class ChordNode {
             BigInteger mod = BigInteger.valueOf(2).pow(m);
             return hashInt.mod(mod).toString();
         } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
+            // e.printStackTrace();
             return null;
         }
     }
@@ -528,37 +528,33 @@ public class ChordNode {
         printFileMap();
     }
 
-    // 99% sure this needs to be rewritten, since if starthash = 40, endHash = 10, it won't find it properly
-    // have not fully debugged this
     public Map<String, List<String>> getFilesInRange(String startHash, String endHash) {
         Map<String, List<String>> filesInRange = new HashMap<>();
-        NavigableMap<String, List<String>> navigableFileMap = new TreeMap<>(fileMap);
 
-        // Case 1: Normal range (startHash <= endHash)
-        if (startHash.compareTo(endHash) <= 0) {
-            filesInRange.putAll(navigableFileMap.subMap(startHash, true, endHash, true));
-        }
-        // Case 2: Wraparound range (startHash > endHash)
-        else {
-            // Part 1: From startHash to the highest key in the map
-            filesInRange.putAll(navigableFileMap.tailMap(startHash, true));
+        int start = Integer.parseInt(startHash);
+        int end = Integer.parseInt(endHash);
+        int maxValue = (int) (Math.pow(2, m) - 1);
 
-            // Part 2: From the lowest key in the map to endHash
-            filesInRange.putAll(navigableFileMap.headMap(endHash, true));
+        for (Map.Entry<String, List<String>> entry : fileMap.entrySet()) {
+            String key = entry.getKey();
+            int keyHash = Integer.parseInt(key);
+
+            boolean inRange;
+            if (start <= end) {
+                // non-wraparound case
+                inRange = keyHash >= start && keyHash <= end;
+            } else {
+                // wraparound case
+                inRange = (keyHash >= start && keyHash <= maxValue) || (keyHash >= 0 && keyHash <= end);
+            }
+
+            if (inRange) {
+                filesInRange.put(key, entry.getValue());
+            }
         }
+
         return filesInRange;
     }
-
-//    public Map<String, List<String>> getFilesInRange(String startHash, String endHash) {
-//        Map<String, List<String>> filesInRange = new HashMap<>();
-//        for (Map.Entry<String, List<String>> entry : fileMap.entrySet()) {
-//            String fileHash = entry.getKey();
-//            if (fileHash.compareTo(startHash) >= 0 && fileHash.compareTo(endHash) <= 0) {
-//                filesInRange.put(fileHash, entry.getValue());
-//            }
-//        }
-//        return filesInRange;
-//    }
 
     public void printFilesInRange(String startHash, String endHash) {
         Map<String, List<String>> filesInRange = getFilesInRange(startHash, endHash);

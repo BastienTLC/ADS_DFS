@@ -253,7 +253,7 @@ public class ChordClient {
             @Override
             public void onError(Throwable t) {
                 System.err.println("Failed to retrieve file: " + t.getMessage());
-                t.printStackTrace();
+                // t.printStackTrace();
                 future.complete(false);
             }
 
@@ -308,7 +308,7 @@ public class ChordClient {
             @Override
             public void onError(Throwable t) {
                 System.err.println("Failed to retrieve file: " + t.getMessage());
-                t.printStackTrace();
+                // t.printStackTrace();
                 latch.countDown();
             }
 
@@ -332,7 +332,7 @@ public class ChordClient {
             latch.await();
         } catch (InterruptedException e) {
             System.err.println("Interrupted while waiting for file retrieval to complete.");
-            e.printStackTrace();
+            // e.printStackTrace();
         }
     }
 
@@ -389,7 +389,7 @@ public class ChordClient {
             @Override
             public void onError(Throwable t) {
                 System.err.println("Error during file download: " + t.getMessage());
-                t.printStackTrace();
+                // t.printStackTrace();
                 inProgressFiles.forEach((key, diskFileStorage) -> {
                     try {
                         diskFileStorage.close();
@@ -471,7 +471,7 @@ public class ChordClient {
 
             @Override
             public void onError(Throwable t) {
-                t.printStackTrace();
+                //t.printStackTrace();
                 finishLatch.countDown();  // Signal that the process failed
             }
 
@@ -507,7 +507,8 @@ public class ChordClient {
             // Wait until the file upload is complete or an error occurs
             finishLatch.await();
         } catch (Exception e) {
-            e.printStackTrace();
+            // e.printStackTrace();
+            System.out.println("Error occured");
             requestObserver.onError(e);  // Notify the server of the error
         }
     }
