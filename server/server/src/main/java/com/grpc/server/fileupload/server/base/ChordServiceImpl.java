@@ -564,7 +564,58 @@ public class ChordServiceImpl extends ChordImplBase {
     public void retrieveFileFromChord(FileDownloadRequest request, StreamObserver<FileDownloadResponse> responseObserver) {
         String filename = request.getFileName();
         String requester = request.getRequester();
-        chordNode.retrieveMessageFromChord(filename, requester, responseObserver);
+
+        String fileIdentifier = filename + ":" + requester;
+
+        // Respond immediately if it is storing the file
+        if (chordNode.checkMappingForFileIdentifier(fileIdentifier)) {
+            System.out.println("The file " + filename + " was found without having to check other nodes!");
+            String filePath = "output/" + this.chordNode.getNodeId() + "/" + requester + "/" + filename;
+            java.io.File file = new java.io.File(filePath);
+            java.io.File parentDir = file.getParentFile();
+
+            if (!parentDir.exists()) {
+                System.out.println(String.format("Directory not found: %s", parentDir.getPath()));
+                responseObserver.onError(Status.PERMISSION_DENIED.withDescription("Directory not found").asRuntimeException());
+                return;
+            }
+
+            if (!file.exists() || !file.isFile()) {
+                System.out.println(String.format("File not found: %s", filename));
+                responseObserver.onError(Status.NOT_FOUND.withDescription("File not found").asRuntimeException());
+                return;
+            }
+
+
+            byte[] fiveKB = new byte[5120];
+            int length;
+
+            try (InputStream inputStream = new FileInputStream(file)) {
+                // Reading bytes and sending them to the client
+                while ((length = inputStream.read(fiveKB)) > 0) {
+                    System.out.println(String.format("Sending %d length of data", length));
+                    File fileMessage = File.newBuilder()
+                            .setContent(ByteString.copyFrom(fiveKB, 0, length))
+                            .build();
+
+                    FileDownloadResponse response = FileDownloadResponse.newBuilder()
+                            .setFile(fileMessage)  // Use the File message containing the content
+                            .build();
+
+                    responseObserver.onNext(response);
+                }
+
+                // Response is completed once all data is sent
+                responseObserver.onCompleted();
+
+            } catch (IOException e) {
+                System.out.println(String.format("Error reading file: " + filename, e));
+                responseObserver.onError(Status.INTERNAL.withDescription("Error reading file").asRuntimeException());
+            }
+        }
+        else {
+            chordNode.retrieveMessageFromChord(filename, requester, responseObserver);
+        }
     }
 
     public void deleteFileFromChord(FileDownloadRequest request, StreamObserver<com.google.protobuf.Empty> responseObserver) {

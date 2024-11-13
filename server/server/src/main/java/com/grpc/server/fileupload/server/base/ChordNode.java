@@ -889,10 +889,9 @@ public class ChordNode {
         List<Integer> leafNodes = treeReplication.getLeafNodes(replicaTree);
         boolean fileRetrieved = false;
 
-        ChordClient responsibleNodeClient = null;
         for (Integer replicaKey : leafNodes) {
             NodeHeader responsibleNode = findSuccessor(replicaKey.toString());
-            responsibleNodeClient = new ChordClient(responsibleNode.getIp(), Integer.parseInt(responsibleNode.getPort()));
+            ChordClient responsibleNodeClient = new ChordClient(responsibleNode.getIp(), Integer.parseInt(responsibleNode.getPort()));
 
             System.out.println("Attempting to retrieve file from replica: " + responsibleNode.getIp() + ":" + responsibleNode.getPort());
 
@@ -900,15 +899,17 @@ public class ChordNode {
 
             if (retrievalResult.join()) {
                 fileRetrieved = true;
+                responsibleNodeClient.shutdown();
                 break;
             }
+            responsibleNodeClient.shutdown();
+
         }
 
         if (!fileRetrieved) {
             System.out.println("File not found in any replicas.");
         }
 
-        responsibleNodeClient.shutdown();
         // return message;
     }
 
