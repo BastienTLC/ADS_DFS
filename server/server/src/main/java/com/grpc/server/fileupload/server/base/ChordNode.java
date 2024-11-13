@@ -226,16 +226,6 @@ public class ChordNode {
             successorClient.shutdown();
         }
 
-        // looping through the directory where files are stored and adding mapping
-        // we are doing this after having gotten the files from successor
-        // for each mapping a tree is constructed, since for small number of nodes sometimes we will be responsible for 2 replicas
-        // the id used for mapping is the id that was generated using the tree algorithm, and not from hashNode(filename)
-
-        // this also means that we will need to have so that before deleting files when performing transferring
-        // it need to construct a tree to check if it should still keep track of that node
-
-        // Note that the mapping added upon join is added in client.retrieveFiles(),
-        // this is only for adding mapping for existing files
         addMappingForExistingFiles();
 
         printFingerTable();
@@ -283,7 +273,7 @@ public class ChordNode {
 
     public String[] getResponsibleSpan() {
         String[] span = new String[2];
-        // this seems to never get called?
+
         if (predecessor == null) {
             span[0] = "0";
             span[1] = String.valueOf((Math.pow(2, m) - 1));
@@ -572,41 +562,6 @@ public class ChordNode {
     }
 
 
-    public void leave() {
-        loadBalancer.deregisterNode(this.ip, this.port);
-        if (this.successor != null && !this.successor.equals(this.currentHeader)) {
-            // No keys to transfer since this node doesn't store any files
-        }
-
-        // Update successor and predecessor pointers
-        if (this.predecessor != null && this.successor != null) {
-            final String predecessorIp = predecessor.getIp();
-            final int predecessorPort = Integer.parseInt(predecessor.getPort());
-            final String successorIp = successor.getIp();
-            final int successorPort = Integer.parseInt(successor.getPort());
-
-            Runnable task = () -> {
-                ChordClient predecessorClient = new ChordClient(predecessorIp, predecessorPort);
-                ChordClient successorClient = new ChordClient(successorIp, successorPort);
-
-                predecessorClient.setSuccessor(successor);
-                successorClient.setPredecessor(predecessor);
-
-                predecessorClient.shutdown();
-                successorClient.shutdown();
-            };
-
-            executeGrpcCall(task);
-        }
-
-        // Nullify own pointers
-        this.successor = null;
-        this.predecessor = null;
-
-        // Shutdown the executor service if necessary
-        shutdown();
-    }
-
 
     // Method to update other nodes finger tables
     public void updateOthers() {
@@ -638,10 +593,6 @@ public class ChordNode {
         printResponsibleSpan();
         printFingerTable();
 
-        // Responsible span: (25, 48]
-        // contact predecessor, provide range 25-48, have it loop through and transfer those files
-
-
 
     }
 
@@ -663,9 +614,6 @@ public class ChordNode {
                 executeGrpcCall(task);
             }
         }
-//        System.out.println("---- Updating responsible span and finger table ---- ");
-//        printResponsibleSpan();
-//        printFingerTable();
     }
 
     // Method to find the successor of a given ID
@@ -726,36 +674,6 @@ public class ChordNode {
         return this.currentHeader;
     }
 
-    public NodeHeader lookupNodeHeaderById(String id) {
-        // Check if the id is in the range of the current node
-        for (int i = m - 1; i >= 0; i--) {
-            NodeHeader fingerNode = fingerTable.getFingers().get(i);
-            if (fingerNode != null && isInIntervalClosedOpen(id, this.nodeId, fingerNode.getNodeId())) {
-                return fingerNode;
-            }
-        }
-        return this.currentHeader;
-    }
-
-    /*public NodeHeader getSuccessorOfSuccessor(NodeHeader successor) {
-        String nextSuccessorId = successor.getNodeId();
-        int currentValue = Integer.parseInt(nextSuccessorId);
-
-        // Calculate the next value in the ring
-        int maxValue = (int) Math.pow(2, m) - 1;
-        int nextValue = (currentValue + 1) % (maxValue + 1);
-
-        // Find the successor of the next value
-        NodeHeader successorOfSuccessor = lookupNodeHeaderById(String.valueOf(nextValue));
-
-        // Check if the successor of the successor is the same as the current node
-        if (successorOfSuccessor.equals(this.currentHeader)) {
-            return this.currentHeader;
-        }
-
-
-        return successorOfSuccessor;
-    }*/
     public NodeHeader getSuccessorOfSuccessor() {
         for (int i = 0; i < m; i++) {
             NodeHeader fingerNode = fingerTable.getFingers().get(i);
@@ -999,20 +917,6 @@ public class ChordNode {
         // return message;
     }
 
-
-
-
-    // function for checking if current node is responsible for key (haven't checked if it works)
-    public boolean isResponsibleForKey(String key) {
-        String keyId = hashNode(key);
-        System.out.println("Key is: " + key + " and keyId is: " + keyId);
-
-        if (predecessor == null) {
-            return true;
-        } else {
-            return isInIntervalClosedOpen(keyId, predecessor.getNodeId(), this.nodeId);
-        }
-    }
 
     // Interval checking methods
     private boolean isInIntervalOpenOpen(String id, String start, String end) {
