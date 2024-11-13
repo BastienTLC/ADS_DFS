@@ -279,10 +279,10 @@ public class ChordClient {
         return future;
     }
 
-    public void retrieveCopyOfFile(String filename, String username) {
+    public void retrieveCopyOfFile(String filename, String username, ChordNode chordNode) {
         System.out.println("retrieveCopyOfFile called for file: " + filename + " and user: " + username);
 
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        DiskFileStorage diskFileStorage = new DiskFileStorage();
 
         ChordGrpc.ChordStub stub = ChordGrpc.newStub(channel);
 
@@ -298,7 +298,7 @@ public class ChordClient {
             public void onNext(FileDownloadResponse fileDownloadResponse) {
                 System.out.println("Received file chunk for file: " + filename);
                 try {
-                    fileDownloadResponse.getFile().getContent().writeTo(byteArrayOutputStream);
+                    fileDownloadResponse.getFile().getContent().writeTo(diskFileStorage.getStream());
                 } catch (IOException e) {
                     System.err.println("Couldn't write data in retrieveCopyOfFile!");
                     throw new RuntimeException(e);
@@ -316,12 +316,13 @@ public class ChordClient {
             public void onCompleted() {
                 System.out.println("File download completed for: " + filename);
 
-                File finalFile = File.newBuilder()
-                        .setContent(ByteString.copyFrom(byteArrayOutputStream.toByteArray()))
-                        .setFileName(filename)
-                        .build();
-
-                System.out.println("File " + filename + " retrieved successfully for user " + username);
+                try {
+                    diskFileStorage.write(filename, username, chordNode.getNodeId());
+                    diskFileStorage.close();
+                    System.out.println("File " + filename + " retrieved successfully for user " + username);
+                } catch (IOException e) {
+                    System.err.println("Error writing file to disk: " + e.getMessage());
+                }
                 latch.countDown();
             }
         };

@@ -31,6 +31,7 @@ public class ChordNode {
     private final LoadBalancer loadBalancer;
     private TreeMap<String, List<String>> fileMap; // when node joins fill this tree with existing files
     private TreeMap<String, List<String>> predecessorReplicationMap;
+    private boolean crashFlag;
 
 
     public ChordNode(String ip, int port, boolean multiThreadingEnabled, LoadBalancer loadBalancer, int m) {
@@ -51,6 +52,7 @@ public class ChordNode {
         this.fileMap = new TreeMap<>();
         this.predecessorReplicationMap = new TreeMap<>(); // here copy of predecessors tree map will be stored
 
+        this.crashFlag = false;
     }
 
     // Function to hash the node ID based on IP and port
@@ -80,7 +82,7 @@ public class ChordNode {
             return;
         }
 
-        if (this.predecessor == null) {
+        if (this.predecessor == null && crashFlag) {
             System.out.println("New predecessor found: " + predecessor.getIp() + ":" + predecessor.getPort());
             this.predecessor = predecessor;
 
@@ -110,9 +112,9 @@ public class ChordNode {
                     else {
                         String id = hashNode(filename);
 
-                        int maxDepth = 1; // this is the depth it will be doing replication for, so actual depth of tree is 2
+                        int depth = 2; // depth of the tree it will be doing replication for
                         TreeBasedReplication treeReplication = new TreeBasedReplication(m);
-                        Map<Integer, List<Integer>> replicaTree = treeReplication.generateReplicaTree(Integer.parseInt(id), maxDepth);
+                        Map<Integer, List<Integer>> replicaTree = treeReplication.generateReplicaTree(Integer.parseInt(id), depth);
                         List<Integer> leafNodes = treeReplication.getLeafNodes(replicaTree);
 
 
@@ -124,7 +126,7 @@ public class ChordNode {
                                     NodeHeader responsibleNode = findSuccessor(String.valueOf(replicaKey));
                                     System.out.println("Obtaining the file '" + file + "' from " + responsibleNode.getIp() + ":" + responsibleNode.getPort());
                                     ChordClient responsibleNodeClient = new ChordClient(responsibleNode.getIp(), Integer.parseInt(responsibleNode.getPort()));
-                                    responsibleNodeClient.retrieveCopyOfFile(filename, username); // this does not add any mapping I think
+                                    responsibleNodeClient.retrieveCopyOfFile(filename, username, this); // this does not add any mapping I think
                                     responsibleNodeClient.shutdown();
 
                                     retrievedFilesSet.add(file);
@@ -168,9 +170,10 @@ public class ChordNode {
                 }
 
                 predecessorClient.shutdown();
+
             }
 
-
+            crashFlag = false;
 
         }
         else{
@@ -241,16 +244,19 @@ public class ChordNode {
 
     private boolean isWrappedAround() {
         if (predecessor == null) return false;
-        int predId = Integer.parseInt(predecessor.getNodeId());
-        int currentId = Integer.parseInt(nodeId);
-        int succId = Integer.parseInt(successor.getNodeId());
 
-        // special case when inserting between the last and first node
-        if (predId > succId) {
-            return currentId < succId || currentId > predId;
+        int start = Integer.parseInt(predecessor.getNodeId());
+        int end = Integer.parseInt(this.nodeId);
+
+        // no wrap-around
+        if (start < end) {
+            return false;
+        }
+        // wrap around
+        else {
+            return true;
         }
 
-        return predId >= currentId;
     }
 
     public void mergeFileMaps() {
@@ -394,10 +400,10 @@ public class ChordNode {
         String id = hashNode(filename);
         String value = filename + ":" + username;
 
-        int maxDepth = 1; // this is the depth it will be doing replication for, so actual depth of tree is 2
+        int depth = 2;
         System.out.println("The ID of the filename used for generating the tree is: " + id);
         TreeBasedReplication treeReplication = new TreeBasedReplication(m);
-        Map<Integer, List<Integer>> replicaTree = treeReplication.generateReplicaTree(Integer.parseInt(id), maxDepth);
+        Map<Integer, List<Integer>> replicaTree = treeReplication.generateReplicaTree(Integer.parseInt(id), depth);
         List<Integer> leafNodes = treeReplication.getLeafNodes(replicaTree);
         System.out.println("Leaf nodes generated for the mapping: " + leafNodes);
 
@@ -835,6 +841,7 @@ public class ChordNode {
             } catch (Exception e) {
                 System.err.println("Predecessor node failed. Setting predecessor to null.");
                 this.predecessor = null;
+                this.crashFlag = true;
             } finally {
                 if (predecessorClient != null) {
                     predecessorClient.shutdown();
@@ -898,13 +905,10 @@ public class ChordNode {
             String keyId = hashNode(key);
             System.out.println("Key is: " + key + " and keyId is: " + keyId);
 
-            // depth specified here is 1 less than the actual depth,
-            // due to how algorithm is implemented using recursion
-            int maxDepth = 1;
-
+            int depth = 2;
             TreeBasedReplication treeReplication = new TreeBasedReplication(m);
 
-            Map<Integer, List<Integer>> replicaTree = treeReplication.generateReplicaTree(Integer.parseInt(keyId), maxDepth);
+            Map<Integer, List<Integer>> replicaTree = treeReplication.generateReplicaTree(Integer.parseInt(keyId), depth);
             // treeReplication.displayTree(replicaTree);
             List<Integer> leafNodes = treeReplication.getLeafNodes(replicaTree);
             System.out.println("Leaf Nodes: " + leafNodes);
@@ -945,8 +949,9 @@ public class ChordNode {
 
 
         // below is used for going through replica nodes if value is not found
+        int depth = 2;
         TreeBasedReplication treeReplication = new TreeBasedReplication(m);
-        Map<Integer, List<Integer>> replicaTree = treeReplication.generateReplicaTree(Integer.parseInt(keyId), 1);
+        Map<Integer, List<Integer>> replicaTree = treeReplication.generateReplicaTree(Integer.parseInt(keyId), depth);
         List<Integer> leafNodes = treeReplication.getLeafNodes(replicaTree);
         boolean fileRetrieved = false;
 

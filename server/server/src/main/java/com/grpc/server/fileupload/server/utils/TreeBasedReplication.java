@@ -17,7 +17,12 @@ public class TreeBasedReplication {
     public Map<Integer, List<Integer>> generateReplicaTree(int rootKey, int maxDepth) {
         Map<Integer, List<Integer>> replicaTree = new HashMap<>();
 
-        generateReplicaTreeRecursive(replicaTree, rootKey, 0, maxDepth, MODULO / 2);
+        if (maxDepth < 1) {
+            replicaTree.put(0, new ArrayList<>(Collections.singletonList(rootKey)));
+            return replicaTree;
+        }
+
+        generateReplicaTreeRecursive(replicaTree, rootKey, 0, maxDepth-1, MODULO / 2);
 
         return replicaTree;
     }
